@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import {createWorkHands,workPose} from '../client/src/work-hands.js';
+import {createWorkHands,workPose,workAim} from '../client/src/work-hands.js';
 import {createGame,startHold,useItem,snapshotGame,cancelHold} from '../server/game.js';
 let count=0;const check=(name,fn)=>{fn();count++;console.log('PASS '+name);};
 const player={id:'p',dept:'engineering',connected:true},base={player:{},hold:{id:'breach:1',progress:.4},working:true};
@@ -8,6 +8,7 @@ check('work only appears for an acknowledged hold with the interaction still pre
 check('menus, spectators, seats and inactive crew never show working arms',()=>{for(const flag of ['down','lost','escaped','aboard','subSeat'])assert.equal(workPose({...base,player:{[flag]:true}}),null);assert.equal(workPose({...base,blocked:true}),null);assert.equal(workPose({...base,stage:'vote'}),null);for(const id of ['board','sub:board','sub:dock','log:arrival'])assert.equal(workPose({...base,hold:{id,progress:.3}}),null);});
 check('tools and hand poses follow the actual kind of work',()=>{for(const [id,kind] of [['power','repair'],['service:pump','valve'],['airlock_out','valve'],['treat:med','treat'],['scrap:1','reach'],['resource:1','reach'],['salvage:recover','reach'],['door_medical','controls'],['circuit:control','controls']])assert.equal(workPose({...base,hold:{id,progress:.3}}).kind,kind);assert.equal(workPose({...base,hold:{id:'power',progress:.3,tool:'welder'}}).kind,'repair');assert.equal(workPose({...base,hold:{id:'breach:1',progress:.3,tool:'welder'}}).kind,'weld');});
 check('only real server welder use changes snapshot tool metadata, and cancellation removes it',()=>{const players=[{...player}],game=createGame({players,now:0,seed:5}),p=players[0];game.breaches.push({id:'breach:test',x:p.x,z:p.z,room:'control'});assert.equal(startHold(game,players,p,'breach:test'),null);assert.equal(snapshotGame(game,players).holds.p.tool,null);assert.equal(useItem(game,players,p,3),null);assert.equal(snapshotGame(game,players).holds.p.tool,'welder');cancelHold(game,p.id);assert.equal(snapshotGame(game,players).holds.p,undefined);});
+check('work alignment respects camera heading, stays bounded and rejects invalid targets',()=>{assert(workAim({x:1,z:-2},{x:0,z:0},0).x>0);assert(workAim({x:-1,z:-2},{x:0,z:0},0).x<0);assert.deepEqual(workAim({x:0,z:2},{x:0,z:0},0),{x:0,y:0});assert.deepEqual(workAim({x:NaN,z:0},{x:0,z:0},0),{x:0,y:0});assert(Math.abs(workAim({x:100,z:-.1,y:100},{x:0,z:0},0).x)<=.03);});
 const view=createWorkHands();
 try{
  check('hands have a bounded ten-mesh budget, finite geometry and no shadow passes',()=>{let meshes=0,vertices=0;view.root.traverse(m=>{if(m.isMesh){meshes++;vertices+=m.geometry.attributes.position.count;assert(!m.castShadow);assert([...m.geometry.attributes.position.array].every(Number.isFinite));}});assert(meshes<=10);assert(vertices<45000);assert.equal(view.root.visible,false);});

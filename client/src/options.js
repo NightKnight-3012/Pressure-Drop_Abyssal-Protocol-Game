@@ -17,7 +17,7 @@ export function normalizeOptions(value) {
 }
 
 function load() {
-  try { return normalizeOptions(JSON.parse(localStorage.getItem(KEY) || "{}")); } catch { return { ...DEFAULTS }; }
+  try { const saved=JSON.parse(localStorage.getItem(KEY) || '{}');const normalized=normalizeOptions(saved);if(!saved||typeof saved.reduced!=='boolean')normalized.reduced=!!globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches;return normalized; } catch { return { ...DEFAULTS }; }
 }
 
 export const options = load();

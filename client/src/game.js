@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import {createFrameStats} from "./frame-stats.js";
 import {
   EYE_HEIGHT, DOWNED_EYE_HEIGHT, STAMINA, WALK_SPEED, RUN_SPEED, SWIM_SPEED, FLOODED_SPEED_FACTOR, FLOODED_SLOW_LEVEL, PLAYER_RADIUS,
   INNER, EXT_LIMIT, REPAIR_RANGE, BREACH_RANGE, TREAT_RANGE, CONSOLE_RANGE, STATIONS, ROOM_IDS, ROOMS, DEPTS,
@@ -29,7 +30,7 @@ import {createSubHud} from './sub-hud.js';
 import {PRACTICE_STEPS,practiceTargetAllowed} from '../../shared/practice.js';
 import {saveEvidence} from './case-file.js';
 import {EXTERIOR_ZONES,exteriorZone} from '../../shared/exterior.js';
-import {createWorkHands,workPose} from './work-hands.js';
+import {createWorkHands,workPose,workAim} from './work-hands.js';
 
 const SEND_INTERVAL_MS = 70;
 const HOLD_RETRY_MS = 600;
@@ -107,7 +108,7 @@ export function startGame({ playerId, code, match, chat }) {
     spectateId: null, lastLeftToast: false, errored: false, voteTimer: 0, lastWarn: 0, votingShown: false,
     input: null, onResize: null, chatInput: document.getElementById("chat-input")
   };
-  G.comms = createMissionComms(); G.locomotion = createLocomotion();G.workHands=createWorkHands();
+  G.frameStats=createFrameStats();G.comms = createMissionComms(); G.locomotion = createLocomotion();G.workHands=createWorkHands();
   G.lockerId=null;G.locker=createLockerPanel(net.take,closeLocker,net.craft);
   G.subHud=createSubHud(net);G.subSound=createPodSound();
   G.chatInput.value = ""; G.chatInput.classList.add("hidden");
@@ -516,6 +517,8 @@ function frame() {
 
 function step() {
   const frameTime = G.clock.getDelta(), dt = Math.min(frameTime, 0.1);
+  const measured=G.frameStats.sample(frameTime,!document.hidden&&!G.connectionLost);
+  if(measured){const output=document.getElementById('performance-readout');if(output)output.textContent=measured.fps+' FPS / 95th-percentile frame '+measured.p95+' ms / '+options.quality+' / measured on this device';}
   const ratio = G.renderBudget.sample(frameTime, !document.hidden && !G.paused && !G.connectionLost);
   if (ratio !== null) G.renderer.setPixelRatio(ratio);
   const now = performance.now();
@@ -637,7 +640,8 @@ function step() {
 
   // ---- prompts
   const mine = myHold();
-  G.workHands.update(workPose({hold:mine,working:G.holdWanted,blocked:!canAct()||G.phase!=='playing'||!!G.epilogue||G.viewPod||!!G.lockerId||G.consoleOpen||G.votingShown,player:me,stage:state.stage}),dt,reduced);
+  const workTarget=mine?nearestTarget():null,workPoint=workTarget?.st||workTarget?.b||workTarget?.o||workTarget?.point;
+  G.workHands.update(workPose({hold:mine,working:G.holdWanted&&workTarget?.id===mine?.id,blocked:!canAct()||G.phase!=='playing'||!!G.epilogue||G.viewPod||!!G.lockerId||G.consoleOpen||G.votingShown||document.body.classList.contains('wrist-open'),player:me,stage:state.stage,aim:workAim(workPoint,camera.position,G.input.yaw,G.input.pitch)}),dt,reduced);
   if (mine) {
     if (!G.wasHolding) sfx.holdStart();
     G.wasHolding = true;

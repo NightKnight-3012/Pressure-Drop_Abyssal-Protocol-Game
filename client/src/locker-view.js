@@ -1,3 +1,4 @@
+import {controlText} from './control-text.js';
 import * as THREE from 'three';
 import {LOCKERS} from '../../shared/layout.js';
 // Two mounted plates inside the existing storage fronts. No new lights or colliders.
@@ -15,11 +16,11 @@ export function createLockerView(scene) {
     update(state) {
       for(const p of plates){
         const count=Object.values(state.lockers?.[p.def.id]||{}).reduce((a,b)=>a+b,0),open=state.stage==='main';
-        const key=`${count}:${open}`;if(key===p.key)continue;p.key=key;
+        const key=`${count}:${open}:${controlText('E')}`;if(key===p.key)continue;p.key=key;
         const g=p.canvas?.getContext('2d');if(!g)continue;
         g.fillStyle='#08171d';g.fillRect(0,0,512,160);g.strokeStyle='#8caeb0';g.lineWidth=5;g.strokeRect(5,5,502,150);
         g.fillStyle='#d3e6e3';g.font='bold 32px monospace';g.fillText('SHARED / STORES',20,48,470);
-        g.font='27px monospace';g.fillText(open?`${count} ${count===1?'SUPPLY':'SUPPLIES'} / PRESS E`:'SEALED / LAUNCH ACTIVE',20,102,470);
+        g.font='27px monospace';g.fillText(controlText(open?`${count} ${count===1?'SUPPLY':'SUPPLIES'} / PRESS E`:'SEALED / LAUNCH ACTIVE'),20,102,470);
         p.texture.needsUpdate=true;
       }
     },

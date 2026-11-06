@@ -22,7 +22,7 @@ check('every repair and launch panel has a reachable working position',Object.va
 const sealed=reachable(['control']);check('closing Control seals central and service exits',sealed.every(([x,z])=>roomAt(x,z)==='control'));
 check('all four service openings are actually walkable',SERVICE_PORTALS.every(p=>!collides(p.x,p.z)));
 const detail=createStationDetail(new THREE.Scene());
-check('department signs face their own rooms from the visible side of the beam',detail.signs.filter(s=>s.row>=1&&s.row<=4).every(s=>Math.sign(Math.cos(s.yaw))===Math.sign(s.z)&&Math.abs(s.z)>2));
+check('department signs face the hub approach and stay mounted on the header backing',detail.signs.filter(s=>s.row>=1&&s.row<=4).every(s=>Math.sign(Math.cos(s.yaw))===-Math.sign(s.z)&&Math.abs(Math.abs(s.z)-1.675)<.001&&Math.abs(s.y-3.55)<.001));
 check('each department has one physical heading rather than duplicate room signs',detail.signs.filter(s=>s.row>=1&&s.row<=4).length===4);detail.dispose();
 const route=createRoute(()=>.5);check('the escape route contains telegraphed collapse sections',route.length===14&&route.some(g=>g.kind==='falling'));
 check('every obstacle leaves at least two clear steering lanes',route.every(g=>[-1,0,1].filter(l=>Math.abs(l-g.lane)>=.52).length>=2));

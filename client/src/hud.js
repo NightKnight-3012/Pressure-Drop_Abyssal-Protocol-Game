@@ -11,7 +11,8 @@ import { missionChapter, roleBriefing } from "./presentation.js";
 import { ITEMS, ITEM_LIMIT } from '../../shared/items.js';
 import { bearingTo } from './gear-guidance.js';
 import {exteriorZone,exteriorNotice} from '../../shared/exterior.js';
-import {options} from './options.js';
+import {options,onOptionsChange} from './options.js';
+import {controlText,bindControlHints} from './control-text.js';
 import {practiceGuidance} from '../../shared/practice.js';
 import {openCrewControls} from './moderation-ui.js';
 
@@ -89,6 +90,7 @@ export function objectiveFor(state, me) {
 }
 
 export function createHud() {
+  const refreshHints=bindControlHints();refreshHints();const unbindHints=onOptionsChange(refreshHints);
   // DOM nodes survive matches; cached state and dynamically created rows do not.
   for (const node of $("game-hud").querySelectorAll("*")) { delete node._t; delete node._c; }
   $("systems-list").replaceChildren();
@@ -169,7 +171,7 @@ export function createHud() {
     el, caption,
     useGear(slot = gearSelection) { net.item(slot); },
     cycleGear() { gearSelection = (gearSelection + 1) % ITEM_LIMIT; gearState = ''; },
-    dispose() { clearTimeout(toastTimer); el.captions.replaceChildren(); },
+    dispose() { unbindHints();clearTimeout(toastTimer); el.captions.replaceChildren(); },
     toggleWrist,
     showRepair(id, spec, send, close) {
       repairId = id; repairSend = send; repairKey = ""; $("repair-panel").classList.remove("hidden");
@@ -257,7 +259,7 @@ export function createHud() {
     // Interaction prompt + progress bar. `prompt` is text or null, `progress` 0-1 or null.
     setInteraction(prompt, progress) {
       setClass(el.interaction, "hidden", !prompt);
-      if (prompt) setText(el.interaction, prompt.replace(/\bE\b/g,options.bindings.interact.replace(/^Key/,'')));
+      if (prompt) setText(el.interaction, controlText(prompt));
       setClass(el.repairWrap, "hidden", progress == null);
       document.body.classList.toggle('working',!!prompt&&progress!=null);
       el.repairWrap.setAttribute('role','progressbar');
@@ -352,7 +354,7 @@ export function createHud() {
       }
 
       // objective + banner
-      setText(el.objective, objectiveFor(state, me));
+      setText(el.objective, controlText(objectiveFor(state, me)));
       setText($("mission-chapter"), missionChapter(state));
       let banner = "";
       if(me?.subSeat&&state.sub?.air<30)banner='SUB AIR LOW / RETURN TO MEDICAL DOCK';
@@ -395,8 +397,8 @@ export function createHud() {
       setText(el.briefingTimer, `MISSION STARTS IN ${Math.max(0, Math.ceil(secondsLeft))}`);
       if (state) {
         const brief = roleBriefing(state, deptId);
-        setText($("briefing-location"), brief.location); setText($("briefing-task"), brief.task);
-        setText($("briefing-evacuation"), brief.evacuation); setText($("briefing-route"), brief.route);
+        setText($("briefing-location"), brief.location); setText($("briefing-task"), controlText(brief.task));
+        setText($("briefing-evacuation"), brief.evacuation); setText($("briefing-route"), controlText(brief.route));
       }
       el.briefing.classList.remove("hidden");
     },
@@ -405,7 +407,7 @@ export function createHud() {
     // ---- down / spectate
     showDown(secondsLeft) {
       el.down.classList.remove("hidden");
-      setText(el.downText, `A teammate can revive you (hold E next to you). ${Number.isFinite(secondsLeft) ? `You will be lost in ${Math.max(0, Math.ceil(secondsLeft))}s.` : "Keep the rescue channel open."}`);
+      setText(el.downText, `A teammate can revive you by holding their interaction key next to you. ${Number.isFinite(secondsLeft) ? `You will be lost in ${Math.max(0, Math.ceil(secondsLeft))}s.` : "Keep the rescue channel open."}`);
     },
     hideDown: () => el.down.classList.add("hidden"),
     setSpectate(name) {

@@ -3,7 +3,7 @@ import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 import {STATIONS} from '../../shared/layout.js';
 
 // Presentation only: the server owns the hold, progress, tool and cancellation.
-export function workPose({hold,working=false,blocked=false,player,stage='main'}={}){
+export function workPose({hold,working=false,blocked=false,player,stage='main',aim}={}){
   if(!hold||!working||blocked||!player||player.down||player.lost||player.escaped||player.aboard||player.subSeat||stage==='vote'||typeof hold.id!=='string'||!Number.isFinite(hold.progress))return null;
   const id=hold.id;
   if(id==='board'||id==='sub:board'||id==='sub:dock'||id.startsWith('log:'))return null;
@@ -13,7 +13,15 @@ export function workPose({hold,working=false,blocked=false,player,stage='main'}=
   else if(id==='pump'||id==='service:pump'||id==='o2'||id.startsWith('airlock'))kind='valve';
   else if(id.startsWith('resource:')||id.startsWith('scrap:')||id==='salvage:recover')kind='reach';
   else if(STATIONS[id]?.kind==='door'||id.startsWith('circuit:')||id==='launch')kind='controls';
-  return {kind,progress:THREE.MathUtils.clamp(hold.progress,0,1),id};
+  return {kind,progress:THREE.MathUtils.clamp(hold.progress,0,1),id,aim};
+}
+
+export function workAim(point,position,yaw,pitch=0){
+  if(!point||![point.x,point.z,position.x,position.z,yaw,pitch].every(Number.isFinite))return {x:0,y:0};
+  const dx=point.x-position.x,dz=point.z-position.z;
+  const forward=-Math.sin(yaw)*dx-Math.cos(yaw)*dz,right=Math.cos(yaw)*dx-Math.sin(yaw)*dz;
+  if(forward<=.05)return {x:0,y:0};
+  return {x:THREE.MathUtils.clamp(right/forward,-.5,.5)*.06,y:THREE.MathUtils.clamp(Math.atan2((point.y??1.1)-(position.y??1.65),Math.hypot(dx,dz))-pitch,-.6,.6)*.05};
 }
 
 export function createWorkHands(){
@@ -66,6 +74,8 @@ export function createWorkHands(){
       left.position.set(-.25,-.33-(1-raised)*.36,-.74-stretch);
       right.position.set(.26,-.36-(1-raised)*.36,-.69-stretch);
       left.rotation.set(-.12,0,-.23);right.rotation.set(-.15,-.12,.20);
+      const aimX=Number.isFinite(pose.aim?.x)?THREE.MathUtils.clamp(pose.aim.x,-.03,.03):0,aimY=Number.isFinite(pose.aim?.y)?THREE.MathUtils.clamp(pose.aim.y,-.03,.03):0;
+      left.position.x+=aimX;right.position.x+=aimX;left.position.y+=aimY;right.position.y+=aimY;
       if(pose.kind==='valve'){left.rotation.z+=turn;right.rotation.z-=turn;left.position.y+=wave*.008;}
       else if(pose.kind==='weld'){right.position.x+=wave*.013;right.rotation.y+=turn*.15;}
       else if(pose.kind==='repair'){right.rotation.z+=turn;right.position.y+=wave*.007;}
