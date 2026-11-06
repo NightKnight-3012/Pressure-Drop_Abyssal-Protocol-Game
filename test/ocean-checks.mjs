@@ -1,0 +1,45 @@
+import assert from "node:assert/strict";
+import * as THREE from "three";
+import { initialLeviathanYaw, leviathanYaw, swimWave } from "../client/src/leviathan-motion.js";
+import { createOcean, createSeabed, oceanHeight, oceanNoise } from "../client/src/ocean.js";
+import { wreckPanelGeometry } from "../client/src/wreckage.js";
+
+let checks = 0;
+const check = (name, condition) => { assert.ok(condition, name); checks++; console.log(`PASS ${name}`); };
+const forward = yaw => new THREE.Vector3(1, 0, 0).applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
+for (const direction of [-1, 1]) for (const angle of [-3.13, -1.4, 0, 2, 3.13]) {
+  const a = { x: Math.cos(angle) * 40, z: Math.sin(angle) * 40 }, b = { x: Math.cos(angle + direction * 0.01) * 40, z: Math.sin(angle + direction * 0.01) * 40 };
+  const movement = new THREE.Vector3(b.x - a.x, 0, b.z - a.z).normalize();
+  check(`Leviathan faces actual patrol movement (${direction}, ${angle})`, forward(leviathanYaw(a, b)).dot(movement) > 0.9999);
+}
+check("retreat faces away from the station", forward(leviathanYaw({ x: 11, z: 0 }, { x: 12, z: 0 })).x > 0.99);
+check("approach faces toward the station", forward(leviathanYaw({ x: 12, z: 0 }, { x: 11, z: 0 })).x < -0.99);
+check("motionless snapshots retain the previous heading", leviathanYaw({ x: 2, z: 3 }, { x: 2, z: 3 }, 1.2) === 1.2);
+check("initial clockwise patrol follows the server's direction", forward(initialLeviathanYaw({ angle: 0, patrolDir: -1, state: "patrol" })).z < -0.99);
+check("initial counterclockwise patrol follows the server's direction", forward(initialLeviathanYaw({ angle: 0, patrolDir: 1, state: "patrol" })).z > 0.99);
+const x = -4, t = 2, d = 0.7, delay = d * 0.35 / 1.4;
+check("body wave travels from head toward tail", Math.abs(swimWave(x, t) / Math.pow((5.7 - x) / 21, 1.4) - swimWave(x - d, t + delay) / Math.pow((5.7 - x + d) / 21, 1.4)) < 1e-10);
+check("head remains stable while the tail flexes", swimWave(5.7, 1) === 0 && Math.abs(swimWave(-15.3, 1)) > 0.1);
+check("terrain noise is reproducible", oceanNoise(1.2, -4.3) === oceanNoise(1.2, -4.3));
+let apronSafe = true; for (let x = -17; x <= 17; x++) for (let z = -17; z <= 17; z++) apronSafe &&= oceanHeight(x, z) > -0.51 && oceanHeight(x, z) < -0.45;
+check("the entire playable EVA apron keeps its safe floor height", apronSafe);
+check("the distant shelf has real relief", oceanHeight(50, 30) < oceanHeight(15, 10) - 1);
+const scene = new THREE.Scene(), ocean = createOcean(scene), terrain = ocean.root.getObjectByName("Eroded sediment shelf");
+check("seabed uses textured, lit geometry with normal detail", terrain.material.normalMap?.isTexture && terrain.material.map?.isTexture && terrain.material.isMeshStandardMaterial);
+let finite = true; ocean.root.traverse(o => { if (o.geometry) for (const attr of ["position", "normal", "color"]) if (o.geometry.attributes[attr]) finite &&= Array.from(o.geometry.attributes[attr].array).every(Number.isFinite); });
+check("ocean terrain and habitat geometry remain finite", finite);
+check("rocks and sea fans are instanced", ocean.root.children.filter(o => o.isInstancedMesh).length === 6);
+const second = createOcean(new THREE.Scene());
+const otherTerrain = second.root.getObjectByName("Eroded sediment shelf"), tiling = otherTerrain.material.map.repeat.clone();
+terrain.material.map.repeat.set(1, 1);
+check("reusing sediment data keeps scene texture settings independent", otherTerrain.material.map.repeat.equals(tiling));
+check("all players receive the same rock placement", ocean.root.children.find(o => o.isInstancedMesh).instanceMatrix.array.every((v, i) => v === second.root.children.find(o => o.isInstancedMesh).instanceMatrix.array[i]));
+ocean.dispose(); second.dispose(); check("disposing the ocean removes its scene objects", !scene.children.length);
+const panel = wreckPanelGeometry(), bounds = new THREE.Box3().setFromBufferAttribute(panel.attributes.position);
+check("wreckage is curved rather than a rectangular solid", bounds.max.z - bounds.min.z > 0.3);
+check("wreckage has actual holes and torn boundaries", panel.index.count < 18 * 24 * 6 && bounds.max.y - bounds.min.y > 4.8);
+check("wreckage carries localized corrosion colours", new Set(Array.from(panel.attributes.color.array).map(v => v.toFixed(2))).size > 20);
+panel.dispose();
+const route = createSeabed(160, 600, true); check("pod route seabed stays below the cockpit", Array.from(route.geometry.attributes.position.array).filter((_, i) => i % 3 === 1).every(y => y < -1.2));
+route.geometry.dispose(); route.material.map.dispose(); route.material.normalMap.dispose(); route.material.dispose();
+console.log(`${checks}/${checks} exterior checks passed`);

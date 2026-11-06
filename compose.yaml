@@ -1,0 +1,11 @@
+services:
+  pressure-drop:
+    build: .
+    ports:
+      - "3000:3000"
+    volumes:
+      - pressure-drop-data:/data
+    restart: unless-stopped
+    stop_grace_period: 10s
+volumes:
+  pressure-drop-data:

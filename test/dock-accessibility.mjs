@@ -1,0 +1,11 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import {JSDOM} from 'jsdom';
+import {createSubHud} from '../client/src/sub-hud.js';
+const dom=new JSDOM(fs.readFileSync('client/index.html','utf8'));globalThis.document=dom.window.document;
+const calls=[],view=createSubHud({interact:id=>calls.push(id),cancel:()=>calls.push('cancel'),subAction(){}}),dock=document.getElementById('sub-dock');
+const key=(type,code,repeat=false)=>dock.dispatchEvent(new dom.window.KeyboardEvent(type,{code,repeat,bubbles:true,cancelable:true}));
+key('keydown','Space');key('keydown','Space',true);assert.deepEqual(calls,['sub:dock']);key('keyup','Space');assert.equal(calls.at(-1),'cancel');
+key('keydown','Enter');dock.dispatchEvent(new dom.window.Event('blur'));assert.equal(calls.at(-1),'cancel');
+dock.disabled=true;const before=calls.length;key('keydown','Space');assert.equal(calls.length,before);dock.disabled=false;
+key('keydown','Space');view.dispose();assert.equal(calls.at(-1),'cancel');assert.equal(dock.onkeydown,null);dom.window.close();console.log('PASS keyboard docking starts once, cancels on release/blur/disposal, and respects disabled controls');

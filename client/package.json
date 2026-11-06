@@ -1,0 +1,18 @@
+{
+  "name": "pressure-drop-client",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0 --configLoader runner",
+    "build": "vite build --configLoader runner",
+    "preview": "vite preview --host 0.0.0.0"
+  },
+  "dependencies": {
+    "socket.io-client": "^4.8.1",
+    "three": "^0.170.0"
+  },
+  "devDependencies": {
+    "vite": "^6.0.5"
+  }
+}

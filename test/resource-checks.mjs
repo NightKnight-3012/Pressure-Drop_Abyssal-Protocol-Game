@@ -1,0 +1,41 @@
+import {SALVAGE} from '../shared/salvage.js';
+import assert from 'node:assert/strict';
+import * as THREE from 'three';
+import {createGame,startHold,cancelHold,tickGame,useItem,snapshotGame} from '../server/game.js';
+import {RESOURCE_SITES,RESOURCE_RANGE} from '../shared/exterior-resources.js';
+import {AIRLOCK_ARRIVE_EXT,EXT_LIMIT,SWIM_SPEED,collides} from '../shared/layout.js';
+import {createResourceView} from '../client/src/resource-view.js';
+let checks=0;
+const check=(name,fn)=>{fn();checks++;console.log(`PASS ${name}`);};
+function setup(n=1,seed=27){const players=Array.from({length:n},(_,i)=>({id:`p${i}`,name:`Crew ${i}`,dept:'engineering',connected:true}));const game=createGame({players,now:0,seed});game.nextBreachAt=1e6;game.lockdown.nextAt=1e6;return {game,players,p:players[0]};}
+function tick(s,seconds){const out=[];for(let i=0;i<seconds*4;i++)out.push(...tickGame(s.game,s.players,s.game.lastTick+250));return out;}
+function at(s,r=s.game.resources[0]){Object.assign(s.p,{x:r.x,z:r.z+1,exterior:true});return r;}
+for(let n=1;n<=8;n++)check(`${n} crew get bounded supplies without required exterior jobs`,()=>{const s=setup(n);assert.equal(s.game.resources.length,s.game.scale.maxBreaches);assert(s.game.resources.length>=2&&s.game.resources.length<=5);assert.equal(s.game.resources[0].item,'repair');assert(s.game.resources[0].x<-10);assert.equal(s.game.activeJunctions.length,s.game.scale.junctions);assert(Object.keys(s.game.tasks).every(id=>!id.startsWith('resource:')));});
+check('placement and contents are seeded, distinct and independent of the main RNG',()=>{const a=setup(),b=setup(),c=setup(1,99);assert.deepEqual(a.game.resources,b.game.resources);assert.notDeepEqual(a.game.resources,c.game.resources);assert.equal(a.game.rng(),b.game.rng());assert.equal(new Set(a.game.resources.map(r=>r.id)).size,a.game.resources.length);});
+check('every candidate has a collision-free swim route and round trip within full suit air',()=>{
+  const step=.5,key=(x,z)=>`${x},${z}`,q=[{...AIRLOCK_ARRIVE_EXT,d:0}],seen=new Map([[key(q[0].x,q[0].z),0]]);
+  for(let i=0;i<q.length;i++)for(const [dx,dz] of [[step,0],[-step,0],[0,step],[0,-step]]){const x=q[i].x+dx,z=q[i].z+dz,k=key(x,z);if(seen.has(k)||Math.abs(x)>EXT_LIMIT-.4||Math.abs(z)>EXT_LIMIT-.4||collides(x,z,.4,[],true))continue;seen.set(k,q[i].d+step);q.push({x,z,d:q[i].d+step});}
+  for(const r of [...RESOURCE_SITES,SALVAGE]){assert(!collides(r.x,r.z,.4,[],true));const d=seen.get(key(r.x,r.z));assert(Number.isFinite(d));assert(d*2/SWIM_SPEED+5<90);}
+});
+check('full inventories do not reserve, consume or overwrite a canister',()=>{const s=setup(),r=at(s),before=[...s.p.inventory];assert.match(startHold(s.game,s.players,s.p,r.id),/full/);assert.equal(s.game.holds.size,0);assert.deepEqual(s.p.inventory,before);assert.equal(s.game.resources.length,2);});
+check('invalid, remote, interior and inactive intents never reserve resources',()=>{
+  for(const id of [null,{},'resource:__proto__','resource:999','resource:'+ 'a'.repeat(90)]){const s=setup();s.p.inventory[0]=null;at(s);assert(startHold(s.game,s.players,s.p,id));assert.equal(s.game.holds.size,0);}
+  for(const flag of ['lost','downed','aboard','escaped']){const s=setup(),r=at(s);s.p.inventory[0]=null;s.p[flag]=true;assert(startHold(s.game,s.players,s.p,r.id));}
+  const s=setup(),r=at(s);s.p.inventory[0]=null;s.p.exterior=false;assert(startHold(s.game,s.players,s.p,r.id));s.p.exterior=true;s.p.x+=10;assert(startHold(s.game,s.players,s.p,r.id));
+});
+check('a hold consumes one canister only on completion and fills the first empty slot',()=>{const s=setup(),r=at(s);s.p.inventory[0]=null;assert.equal(startHold(s.game,s.players,s.p,r.id),null);tick(s,1);assert(s.game.resources.some(x=>x.id===r.id));const events=tick(s,1.25);assert.equal(s.p.inventory[0],r.item);assert(!s.game.resources.some(x=>x.id===r.id));assert.equal(events.filter(e=>e.type==='resourceRecovered').length,1);assert(startHold(s.game,s.players,s.p,r.id));assert.equal(s.p.inventory.length,4);});
+check('walking away, releasing, going inside or losing inventory space cancels without consumption',()=>{
+  for(const change of ['move','release','inside','full','disconnect']){const s=setup(),r=at(s);s.p.inventory[0]=null;startHold(s.game,s.players,s.p,r.id);tick(s,.5);if(change==='move')s.p.x+=RESOURCE_RANGE+1;if(change==='release')cancelHold(s.game,s.p.id);if(change==='inside')s.p.exterior=false;if(change==='full')s.p.inventory[0]='flare';if(change==='disconnect')s.p.connected=false;tick(s,3);assert(s.game.resources.some(x=>x.id===r.id));assert.equal(s.game.holds.size,0);}
+});
+check('only one diver can open a canister; another can take over after cancellation',()=>{const s=setup(4),r=at(s);s.players.forEach(p=>{Object.assign(p,{x:s.p.x,z:s.p.z,exterior:true});p.inventory[0]=null;});assert.equal(startHold(s.game,s.players,s.p,r.id),null);for(const p of s.players.slice(1))assert(startHold(s.game,s.players,p,r.id));cancelHold(s.game,s.p.id);assert.equal(startHold(s.game,s.players,s.players[1],r.id),null);tick(s,2.25);assert.equal(s.players.filter(p=>p.inventory[0]!==null).length,1);});
+check('launch cancels recovery and ended matches cannot open supplies',()=>{const s=setup(),r=at(s);s.p.inventory[0]=null;startHold(s.game,s.players,s.p,r.id);s.game.stage='vote';s.game.vote={ballots:{},endsAt:999,k:0};tick(s,.25);assert.equal(s.game.holds.size,0);assert(s.game.resources.some(x=>x.id===r.id));assert(startHold(s.game,s.players,s.p,r.id));s.game.status='lose';assert(startHold(s.game,s.players,s.p,r.id));});
+check('opening makes real noise and the HUD reports louder personal activity',()=>{const a=setup(),b=setup(),r=at(a);at(b);a.p.inventory[0]=null;startHold(a.game,a.players,a.p,r.id);tick(a,1);tick(b,1);assert(a.game.lev.threat>b.game.lev.threat);assert.equal(snapshotGame(a.game,a.players,0).players[0].noise,65);});
+check('a recovered part can return through the real airlock and accelerate a station repair',()=>{
+  const s=setup(),r=at(s);s.game.tasks.power.done=true;useItem(s.game,s.players,s.p,0);startHold(s.game,s.players,s.p,r.id);tick(s,2.25);assert.equal(s.p.inventory[0],'repair');
+  Object.assign(s.p,AIRLOCK_ARRIVE_EXT);assert.equal(startHold(s.game,s.players,s.p,'airlock_out'),null);tick(s,3.25);assert(!s.p.exterior);assert.equal(s.p.inventory[0],'repair');
+  s.game.breaches.push({id:'breach:return',x:s.p.x,z:s.p.z,room:'medical'});startHold(s.game,s.players,s.p,'breach:return');const before=s.game.holds.get(s.p.id).need;assert.equal(useItem(s.game,s.players,s.p,0),null);assert(s.game.holds.get(s.p.id).need<before);tick(s,1.5);assert(!s.game.breaches.some(b=>b.id==='breach:return'));
+});
+check('snapshots copy remaining supplies; reconnect preserves depletion; replay resets it',()=>{const s=setup(),r=at(s);s.p.inventory[0]=null;startHold(s.game,s.players,s.p,r.id);tick(s,2.25);const snap=snapshotGame(s.game,s.players);assert.equal(snap.resources.length,1);snap.resources[0].item='scanner';assert.notEqual(s.game.resources[0].item,'scanner');s.p.connected=false;s.p.connected=true;assert.equal(snapshotGame(s.game,s.players).resources.length,1);const fresh=createGame({players:s.players,seed:27,now:0});assert.equal(fresh.resources.length,2);});
+check('resource recovery is recorded in the timeline without contribution farming',()=>{const s=setup(),r=at(s);s.p.inventory[0]=null;startHold(s.game,s.players,s.p,r.id);tick(s,2.25);assert(s.game.timeline.some(e=>/Exterior repair kit recovered/.test(e.text)));assert.equal(s.p.contribution,0);});
+check('models have six bounded batches, no lights, finite instances and disappear after collection',()=>{const scene=new THREE.Scene(),view=createResourceView(scene),s=setup(8);view.update(s.game.resources);assert.equal(view.root.children.length,6);assert(view.root.children.every(o=>o.isInstancedMesh&&!o.castShadow));for(const m of view.root.children)assert([...m.instanceMatrix.array].every(Number.isFinite));view.update(s.game.resources.slice(1));assert.equal(view.root.children[0].count,s.game.resources.length-1);view.update([]);assert(view.root.children.every(m=>m.count===0));view.dispose();assert.equal(scene.children.length,0);});
+console.log(`${checks} exterior resource checks passed`);

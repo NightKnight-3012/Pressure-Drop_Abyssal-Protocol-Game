@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#061018">
+  <title>Pressure Drop: Abyssal Protocol</title>
+</head>
+<body>
+<div id="app">
+
+  <!-- ============ MAIN MENU ============ -->
+  <section id="menu" class="screen menu">
+    <div class="menu-card">
+      <p class="eyebrow">DEEP-SEA RESEARCH DIVISION</p>
+      <h1>PRESSURE<br><span>DROP</span></h1>
+      <p class="subtitle">ABYSSAL PROTOCOL</p>
+      <p class="description">Keep the station alive. Keep your crew together.<br>The launch is only the beginning. Someone may still need you below.</p>
+      <form id="menu-form" autocomplete="off">
+        <label for="player-name">CREW IDENTIFICATION</label>
+        <input id="player-name" maxlength="16" placeholder="Enter your name" autocomplete="off">
+        <button id="create-room" type="button">CREATE ROOM</button>
+        <button id="quick-match" type="button" class="secondary">QUICK MATCH / NORMAL</button>
+        <button id="practice-start" type="button" class="secondary">SOLO TRAINING / REAL CONTROLS</button>
+        <div class="divider"><span>OR JOIN EXISTING CREW</span></div>
+        <input id="room-code" maxlength="5" placeholder="ROOM CODE" autocomplete="off">
+        <button id="join-room" type="button" class="secondary">JOIN ROOM</button>
+      </form>
+      <p id="menu-status" role="status">CONNECTING TO STATION...</p>
+      <div class="menu-footer"><span>v1.0</span><button id="menu-options" type="button" class="link">OPTIONS</button><span>1-8 PLAYERS</span></div>
+      <button id="crew-log-open" class="link">OPEN EXPEDITION RECORDS</button>
+      <button id="case-open" class="link">OPEN NEREID-9 CASE FILE</button>
+      <div class="online-menu"><button id="browse-rooms" class="link">PUBLIC CREWS</button><button id="personal-stats" class="link">MY STATS</button><button id="leaderboards-open" class="link">LEADERBOARDS</button></div>
+    </div>
+  </section>
+
+  <!-- ============ LOBBY ============ -->
+  <section id="lobby" class="screen lobby hidden">
+    <div class="lobby-card">
+      <header class="lobby-head">
+        <div><p class="eyebrow">MISSION BRIEFING ROOM</p><h2>ROOM <span id="lobby-code">-----</span></h2></div>
+        <div class="lobby-actions">
+          <button id="lobby-copy" type="button" class="secondary small">COPY CODE</button>
+          <button id="lobby-options" type="button" class="secondary small">OPTIONS</button>
+          <button id="lobby-case-open" type="button" class="secondary small">CASE FILE</button>
+          <button id="lobby-browse" type="button" class="secondary small">PUBLIC CREWS</button><button id="lobby-stats" type="button" class="secondary small">MY STATS</button><button id="lobby-boards" type="button" class="secondary small">BOARDS</button>
+          <button id="lobby-leave" type="button" class="secondary small">LEAVE</button>
+        </div>
+      </header>
+      <div class="lobby-grid">
+        <div class="panel">
+          <span class="hud-label">CREW <b id="lobby-count">1 / 8</b></span>
+          <p id="visibility-status" class="hint">PRIVATE / CODE ONLY</p><label class="check"><input id="room-public" type="checkbox"> Public room</label><label class="mission-picker">ROOM NAME <input id="public-room-name" maxlength="32"></label><button id="room-visibility-save" class="secondary small">APPLY ROOM SETTINGS</button>
+          <div id="lobby-players" class="lobby-players"></div>
+          <p class="hint" id="lobby-hint">Recommended: 4 or more players so every department is covered.</p>
+        </div>
+        <div class="panel">
+          <span class="hud-label">CHOOSE YOUR DEPARTMENT</span>
+          <label class="mission-picker">MISSION PROFILE <select id="mission-select"><option value="blackout">Blackout</option><option value="pressure">Pressure surge</option><option value="silence">Silent running</option></select></label>
+          <p id="mission-brief" class="hint"></p>
+          <label class="mission-picker">THREATS <select id="difficulty-select"><option value="relaxed">Relaxed</option><option value="normal">Normal</option><option value="nightmare">Nightmare</option></select></label>
+          <div id="dept-cards" class="dept-cards"></div>
+          <div class="lobby-buttons">
+            <button id="ready-button" type="button">READY</button>
+            <button id="start-button" type="button" class="start hidden">START MISSION</button>
+          </div>
+          <p id="lobby-status" class="hint"></p>
+        </div>
+        <div class="panel chat-panel">
+          <span class="hud-label">CREW CHAT</span>
+          <div id="lobby-chat-log" class="chat-log"></div>
+          <input id="lobby-chat-input" class="chat-input" maxlength="120" placeholder="Type a message and press Enter" autocomplete="off">
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ GAME ============ -->
+  <section id="game" class="screen hidden">
+    <div id="game-hud">
+      <div id="underwater"></div>
+      <div id="damage-flash" class="damage-flash"></div>
+      <div id="down-overlay" class="down-overlay hidden"><b>YOU ARE DOWN</b><span id="down-text">A teammate can revive you. Hold on.</span></div>
+
+      <div class="hud-top">
+        <div><span class="hud-label">LOCATION</span><strong id="room-name">CONTROL ROOM</strong></div>
+        <div class="dept-badge" id="dept-badge"></div>
+        <div class="room-display">
+          <span class="hud-label">ROOM</span><strong id="hud-room-code">-----</strong>
+          <span class="hud-label time-label">TIME</span><strong id="hud-time">0:00</strong>
+        </div>
+      </div>
+
+      <div class="objective"><small id="mission-chapter"></small><div id="objective"></div></div>
+      <div id="banner" class="banner hidden"></div>
+      <div id="captions" class="captions"></div>
+
+      <button id="wrist-toggle" class="wrist-toggle secondary small" aria-expanded="false">TAB · WRIST COMPUTER</button>
+      <div class="wrist-tabs" aria-label="Wrist computer views">
+        <button id="wrist-systems" class="secondary small" aria-controls="systems" aria-pressed="true">SYSTEMS</button>
+        <button id="wrist-crew" class="secondary small" aria-controls="roster" aria-pressed="false">CREW</button>
+      </div>
+      <div id="systems" class="side-panel systems wrist-panel">
+        <span class="hud-label">STATION SYSTEMS</span>
+        <div id="systems-list"></div>
+        <p class="hint">Walk through the service hatches to circle all four departments. Room isolation closes its hatches; lockdown seals them.</p>
+        <p class="hint">Emergency survey: two damaged one-person capsules in Control. Beacon and capsule repairs share reserve power after launch.</p>
+        <div id="lockdown-box" class="lockdown-box hidden">
+          <b>LOCKDOWN</b>
+          <small id="lockdown-text"></small>
+          <div class="meter-track"><div id="lockdown-fill" class="meter-fill lock-fill"></div></div>
+        </div>
+      </div>
+      <div id="roster" class="side-panel roster wrist-panel">
+        <span class="hud-label">CREW <b id="player-count">1 / 8</b></span>
+        <div id="roster-list"></div>
+      </div>
+
+      <div class="crosshair"><span></span><span></span></div>
+      <div id="look-prompt">CLICK TO ENABLE MOUSE LOOK</div>
+      <div class="interaction-stack">
+        <div id="interaction" class="interaction hidden"></div>
+        <div id="repair-wrap" class="repair-wrap hidden"><div id="repair-fill" class="repair-fill"></div></div>
+      </div>
+      <div id="toast" class="toast hidden"></div>
+
+      <div id="chat" class="chat">
+        <div id="chat-log" class="chat-log"></div>
+        <input id="chat-input" class="chat-input hidden" maxlength="120" placeholder="Message crew (Enter to send, Esc to cancel)" autocomplete="off">
+      </div>
+
+      <div id="spectate" class="spectate hidden">
+        <b>SPECTATING <span id="spectate-name"></span></b>
+        <small>TAB: next crew member &nbsp; P: ping their location</small>
+      </div>
+
+      <div class="hud-bottom">
+        <div class="meters">
+          <div class="meter-block">
+            <div class="meter-caption"><span>HEALTH</span><strong id="hp-value">100</strong></div>
+            <div class="meter-track"><div id="hp-fill" class="meter-fill hp-fill"></div></div>
+          </div>
+          <div class="meter-block aux-meter">
+            <div class="meter-caption"><span>STAMINA <b id="stm-note"></b></span><strong id="stm-value">100</strong></div>
+            <div class="meter-track"><div id="stm-fill" class="meter-fill stm-fill"></div></div>
+          </div>
+          <div class="meter-block">
+            <div class="meter-caption"><span>STATION OXYGEN</span><strong id="o2-value">100%</strong></div>
+            <div class="meter-track"><div id="o2-fill" class="meter-fill o2-fill"></div></div>
+          </div>
+          <div class="meter-block hidden" id="suit-block">
+            <div class="meter-caption"><span>SUIT OXYGEN</span><strong id="suit-value">90s</strong></div>
+            <div class="meter-track"><div id="suit-fill" class="meter-fill o2-fill"></div></div>
+          </div>
+          <div class="meter-block aux-meter">
+            <div class="meter-caption"><span>WATER IN THIS ROOM</span><strong id="flood-value">0%</strong></div>
+            <div class="meter-track"><div id="flood-fill" class="meter-fill water-fill"></div></div>
+          </div>
+          <div class="meter-block">
+            <div class="meter-caption"><span id="noise-label">YOUR ACOUSTIC SIGNATURE <b id="lev-state">QUIET</b></span><strong id="threat-value">QUIET</strong></div>
+            <div class="meter-track"><div id="threat-fill" class="meter-fill threat-fill"></div></div>
+          </div>
+        </div>
+      <div class="controls" id="controls">WASD · MOVE &nbsp; SHIFT · SPRINT<br>E · USE / HOLD TO REPAIR &nbsp; F · FLASHLIGHT<br>TAB · WRIST COMPUTER &nbsp; ENTER · RADIO</div>
+      </div>
+
+      <div id="finale-status" class="finale-status hidden"></div>
+      <div id="gear" class="gear hidden" aria-label="Limited-use equipment">
+        <div id="gear-slots" class="gear-slots"></div>
+        <small id="gear-hint">1–4 use · Q select · X deploy</small>
+        <small id="gear-contact" class="hidden" role="status"></small>
+      </div>
+      <section id="locker-panel" class="locker-panel hidden" aria-label="Shared supply locker">
+        <div class="locker-heading"><strong id="locker-title"></strong><button id="locker-close" class="secondary small" aria-label="Close supply locker">CLOSE / ESC</button></div>
+        <p id="locker-capacity"></p><p id="locker-note" role="status"></p><div id="locker-stock"></div>
+      </section>
+      <div id="pod-contact-camera" class="pod-contact-camera hidden"><div id="pod-camera-label">STERN CAMERA</div><div id="pod-camera-image"></div></div>
+      <div id="pod-hud" class="pod-hud hidden">
+        <div class="pod-title"><span class="eyebrow">ESCAPE POD · FINAL APPROACH</span><b id="pod-role"></b></div>
+        <div id="pod-readout" class="pod-readout"></div>
+        <div id="pod-warning" class="pod-warning" role="status"></div>
+        <div id="pod-docking" class="pod-docking hidden">
+          <div class="dock-heading"><b id="pod-dock-stage"></b><span id="pod-dock-hint"></span></div>
+          <div id="pod-dock-track" class="dock-track" role="img" aria-label="Pod alignment with the recovery cradle"><span class="dock-safe"></span><span id="pod-dock-marker" class="dock-marker"></span></div>
+          <div id="pod-dock-progress" class="dock-progress" role="progressbar" aria-label="Recovery stage progress" aria-valuemin="0" aria-valuemax="100"><span id="pod-dock-fill"></span></div>
+        </div>
+        <div id="pod-actions" class="pod-actions hidden">
+          <button id="pod-pilot" class="secondary small">T · TRANSFER CONTROLS</button>
+          <button id="pod-repair" class="secondary small">E · HOLD TO REPAIR / RESTORE AIR</button>
+          <button id="pod-sonar" class="secondary small">Q · SONAR</button>
+          <button id="pod-decoy" class="secondary small">X · COUNTERMEASURE</button>
+          <button id="pod-propose" class="secondary small">V · OFFER A DIVERSION</button>
+        </div>
+        <div class="pod-flight-tools"><button id="pod-tools-toggle" class="secondary small" aria-expanded="false" aria-controls="pod-actions">POD TOOLS</button><span>A/D steer · S brake · Shift boost · Hold R look back · E repair · X decoy</span></div>
+        <div id="pod-consent" class="pod-consent hidden"><p id="pod-consent-text"></p><button id="pod-accept" class="small">ACCEPT RISK</button><button id="pod-decline" class="secondary small">DECLINE</button></div>
+      </div>
+      <div id="repair-panel" class="overlay hidden"><div class="overlay-card wide"><p class="eyebrow">MAINTENANCE INTERFACE</p><h2 id="repair-title"></h2><p id="repair-instructions"></p><div id="repair-inputs" class="repair-inputs"></div><p id="repair-status" role="status"></p><button id="repair-close">RETURN TO STATION</button></div></div>
+      <div id="epilogue" class="epilogue hidden"><div class="cinema-bar top"></div><div class="epilogue-copy"><p id="epilogue-kicker" class="eyebrow"></p><h2 id="epilogue-title"></h2><p id="epilogue-text"></p><div id="epilogue-progress" class="cinema-progress" aria-hidden="true"></div></div><button id="epilogue-skip" class="secondary small">CONTINUE TO CREW REPORT</button><div class="cinema-bar bottom"></div></div>
+
+      <!-- Command console: sonar + blast doors + decoy -->
+      <div id="console" class="console hidden">
+        <div class="console-head"><b>COMMAND CONSOLE</b><small>E or ESC to close</small></div>
+        <canvas id="sonar" width="260" height="260"></canvas>
+        <div id="sonar-readout" class="sonar-readout"></div>
+        <div id="console-doors" class="console-doors"></div>
+        <div id="console-decoy" class="console-decoy"></div>
+        <details><summary>LOCAL CIRCUITS / LIGHTING</summary><p class="hint">Isolate live-water faults or hide from the light hunter. Critical systems have separate backup power.</p><div id="console-circuits"></div></details>
+      </div>
+      <section id="sub-hud" class="sub-hud hidden" aria-label="Survey sub controls"><header><strong id="sub-title">SKIFF-2</strong><p id="sub-status"></p></header><small id="sub-bearing"></small><small id="sub-help"></small><div class="sub-buttons"><button id="sub-dock" class="secondary small">HOLD TO DOCK</button><button id="sub-exit" class="secondary small">EXIT HATCH</button></div><details><summary>SURVEY EQUIPMENT</summary><div class="sub-buttons"><button id="sub-flare" class="secondary small">FLARE</button><button id="sub-scan" class="secondary small">SCAN</button><button id="sub-pilot" class="secondary small">TAKE VACANT PILOT SEAT</button></div></details></section>
+    </div>
+
+    <!-- Escape vote -->
+    <div id="vote" class="overlay hidden">
+      <div class="overlay-card wide">
+        <p class="eyebrow">EMERGENCY // ESCAPE POD CAPACITY EXCEEDED</p>
+        <h2>WHO STAYS BEHIND?</h2>
+        <p id="vote-text"></p>
+        <div id="vote-list" class="vote-list"></div>
+        <button id="vote-confirm">CONFIRM BALLOT</button><button id="vote-abstain" class="secondary">ABSTAIN · ACCEPT THE PUBLISHED TIEBREAK</button>
+        <p class="hint" id="vote-confirm-status">Selections stay private until you confirm. Contributions include repairs, rescue, doors, decoys and lockdown coordination.</p>
+        <p class="hint">Voting for yourself means you volunteer (counts double). If votes tie or nobody votes, the crew member who contributed the fewest tasks stays. The server decides; nobody is picked at random.</p>
+        <p class="stats" id="vote-timer"></p>
+      </div>
+    </div>
+
+    <!-- Mission briefing -->
+    <div id="briefing" class="overlay hidden">
+      <div class="overlay-card wide">
+        <p class="eyebrow">MISSION BRIEFING</p>
+        <h2 id="briefing-role"></h2>
+        <p id="briefing-blurb"></p>
+        <div class="brief-mission">
+          <div><small id="briefing-location">YOUR FIRST ASSIGNMENT</small><p id="briefing-task"></p></div>
+          <div><small>THE EVACUATION</small><p id="briefing-evacuation"></p></div>
+          <div><small>THE WAY HOME</small><p id="briefing-route"></p></div>
+        </div>
+        <p class="stats" id="briefing-timer"></p>
+        <p class="hint">WASD move · E interact · Tab wrist · Enter radio. 1–4 use gear; Q selects, X uses. Engineering and Medical stores refill spent slots from finite shared stock. Calibrate, then hold E to repair. Running attracts contact.</p>
+      </div>
+    </div>
+
+    <!-- Match over -->
+    <div id="game-over" class="overlay hidden">
+      <div class="overlay-card wide">
+        <p class="eyebrow">ABYSSAL PROTOCOL // MATCH COMPLETE</p>
+        <h2 id="over-title">CREW EVACUATED</h2>
+        <p id="over-reason"></p>
+        <p id="over-stats" class="stats"></p>
+        <table id="over-table" class="over-table"></table>
+        <details id="match-timeline"><summary>MISSION TIMELINE</summary><ol id="timeline-entries"></ol></details>
+        <button id="to-lobby">RETURN TO LOBBY</button>
+        <button id="leave-room" class="secondary">LEAVE ROOM</button>
+      </div>
+    </div>
+  </section>
+
+  <div id="pause" class="overlay hidden"><div class="overlay-card"><p class="eyebrow">SUIT INTERFACE</p><h2>TAKE A BREATH</h2><p>The crew's mission continues while this menu is open. Your character remains in the station.</p><p class="hint">WASD move · E interact · Shift sprint · Tab wrist computer · Enter radio</p><button id="pause-resume">RESUME</button><button id="pause-options" class="secondary">DISPLAY &amp; CONTROLS</button><button id="pause-leave" class="secondary">LEAVE ROOM</button></div></div>
+  <!-- Connection lost -->
+  <div id="lost" class="overlay hidden">
+    <div class="overlay-card">
+      <p class="eyebrow">COMMUNICATIONS FAILURE</p>
+      <h2>RECONNECTING...</h2>
+      <p>The link to the station was lost. Your character is safe for a short time while we try to reconnect.</p>
+      <button id="lost-leave" class="secondary">GIVE UP AND RETURN TO MENU</button>
+    </div>
+  </div>
+
+  <!-- Options -->
+  <div id="case-file" class="overlay hidden" role="dialog" aria-modal="true" aria-label="NEREID-9 case file"><div class="overlay-card wide"><h2>NEREID-9 / CASE FILE</h2><p>Recovered evidence persists in this browser. The crew shares every record discovered during a match.</p><div id="case-list"></div><button id="case-close">CLOSE CASE FILE</button></div></div>
+  <div id="online-panel" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="online-title"><div class="overlay-card wide online-card"><h2 id="online-title">PUBLIC CREWS</h2><div id="board-filters" class="board-filters hidden"><label>PERIOD<select id="board-period"><option value="all">All time</option><option value="weekly">This week (UTC)</option></select></label><label>RANK<select id="board-kind"><option value="escapes">Escapes</option><option value="revives">Revives</option><option value="fastest">Fastest escape</option></select></label><label>CREW SIZE<select id="board-crew"><option value="0">All sizes</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option></select></label></div><p id="online-status" role="status"></p><div id="online-content" class="online-content"></div><div class="online-actions"><button id="online-refresh" class="secondary small">REFRESH</button><button id="online-close">CLOSE</button></div></div></div>
+  <div id="crew-controls" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="crew-controls-name"><div class="overlay-card"><h2 id="crew-controls-name">CREW</h2><p id="crew-controls-id"></p><button id="crew-mute" class="secondary">MUTE CHAT</button><label for="crew-report-reason">REPORT TO THIS SERVER’S OPERATOR</label><textarea id="crew-report-reason" maxlength="240" rows="3" placeholder="Describe what happened"></textarea><button id="crew-report" class="secondary">SEND REPORT</button><p id="crew-report-status" role="status"></p><p class="hint">Live matches continue while this panel is open. Reports are reviewed manually.</p><button id="crew-controls-close">CLOSE CREW CONTROLS</button></div></div>
+  <div id="crew-log" class="overlay hidden"><div class="overlay-card wide"><p class="eyebrow">EXPEDITION RECORDS</p><h2>THE SIGNALS WE KEPT</h2><div id="crew-log-list"></div><button id="crew-log-close">CLOSE RECORDS</button></div></div>
+  <div id="options" class="overlay hidden">
+    <div class="overlay-card">
+      <p class="eyebrow">OPTIONS</p>
+      <h2>DISPLAY &amp; CONTROLS</h2>
+      <label class="mission-picker">RENDER QUALITY<select id="opt-quality"><option value="low">Low · lower GPU load</option><option value="balanced">Balanced</option><option value="high">High · sharper image, denser ocean</option></select></label>
+      <label class="slider">Brightness <input type="range" id="opt-brightness" min="0.7" max="1.8" step="0.05"></label>
+      <label class="check"><input type="checkbox" id="opt-captions"> Captions for important sounds (sonar pings, hull groans, alarms)</label>
+      <label class="check"><input type="checkbox" id="opt-colorblind"> Colour-blind safe palette (blue / orange, plus symbols)</label>
+      <label class="check"><input type="checkbox" id="opt-reduced"> Reduced effects (no screen shake, flashing or flicker)</label>
+      <label class="check"><input type="checkbox" id="opt-sound"> Sound on</label>
+      <label class="slider">Master volume <input type="range" id="opt-masterVolume" min="0" max="1" step="0.05"> <b id="opt-masterVolume-value"></b></label>
+      <label class="slider">Ocean &amp; machinery <input type="range" id="opt-ambienceVolume" min="0" max="1" step="0.05"> <b id="opt-ambienceVolume-value"></b></label>
+      <label class="slider">Effects &amp; alerts <input type="range" id="opt-effectsVolume" min="0" max="1" step="0.05"> <b id="opt-effectsVolume-value"></b></label>
+      <label class="slider">Mouse sensitivity <input type="range" id="opt-sens" min="0.4" max="2.5" step="0.1"> <b id="opt-sens-value">1.0</b></label>
+      <label class="check"><input type="checkbox" id="opt-invert"> Invert vertical mouse look</label>
+      <label class="slider">Field of view <input type="range" id="opt-fov" min="60" max="100" step="1"><b id="opt-fov-value">75</b></label>
+      <details><summary>REMAP MOVEMENT AND INTERACTION</summary><p class="hint">Select an action, then press its new key. Other shortcuts remain reserved.</p><div id="opt-bindings" class="binding-grid"></div><p id="opt-bind-status" role="status"></p><button id="opt-bind-reset" type="button" class="secondary">RESET CONTROLS</button></details>
+      <button id="options-close">CLOSE</button>
+    </div>
+  </div>
+</div>
+<script type="module" src="/src/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Leviathan visual preview</title>
+<style>body{margin:0;background:#050d13;color:#c6d6d8;font:14px Arial}canvas{display:block}aside{position:absolute;bottom:32px;left:40px;pointer-events:none}h1{letter-spacing:5px;font-size:25px}p{color:#799397}a{color:#8dc4ca;pointer-events:auto}</style></head>
+<body><aside><h1>ABYSSAL LEVIATHAN</h1><p>Creature study · patrol / attack</p><a href="?attack">Attack pose</a> · <a href="?front">Front view</a> · <a href="?side">Side view</a></aside>
+<script>addEventListener('error',e=>{document.querySelector('p').textContent=e.message});addEventListener('unhandledrejection',e=>{document.querySelector('p').textContent=String(e.reason)});</script>
+<script type="module">
+import * as THREE from 'three';
+import { createModelLibrary } from './src/models.js';
+import { createHorrorLeviathan } from './src/leviathan-horror.js';
+const renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(innerWidth,innerHeight);renderer.setPixelRatio(1);
+renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.3;
+document.body.append(renderer.domElement);
+const scene = new THREE.Scene();scene.background=new THREE.Color(0x050d13);
+const camera=new THREE.PerspectiveCamera(44,innerWidth/innerHeight,0.1,150);
+const view=location.search;
+camera.position.set(...(view.includes('front')?[22,2,5]:view.includes('side')?[1,4,30]:[14,5,24]));camera.lookAt(-2,0,0);
+scene.add(new THREE.HemisphereLight(0x8dabb4,0x0a1018,1.7));
+const key=new THREE.DirectionalLight(0xc3d9df,3);key.position.set(12,12,9);scene.add(key);
+const rim=new THREE.DirectionalLight(0x336d8c,3);rim.position.set(-12,8,-10);scene.add(rim);
+const creature=createHorrorLeviathan();scene.add(creature.root);
+const library=createModelLibrary();
+const asset=await library.instantiate('leviathan',[7,5.2,22],{uniform:true,fit:true,centered:true});
+if(asset) creature.attach(asset);
+const state=view.includes('attack')?'attack':'patrol';
+for(let i=0;i<20;i++)creature.update(state,0.05);
+renderer.render(scene,camera);window.__leviathanReady=true;
+</script></body></html>
