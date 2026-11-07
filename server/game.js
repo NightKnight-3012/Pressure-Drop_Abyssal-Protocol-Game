@@ -1,3 +1,4 @@
+import {updateGrabExposure} from './diver-danger.js';
 import {FLOODING,breachSeverity,pumpCapacity,drainShared} from './flooding.js';
 // Pure game-rule logic (no sockets in here). The server owns all of this state:
 // clients can only *ask* for things and the server decides what actually happens.
@@ -50,7 +51,7 @@ export const TUNING = {
   doorCooldown: 1.2,
   // noise (see leviathan.js for how it becomes threat)
   noise: { run: 1.6, machinery: 1.2, diver: 0.25, quiet: 0.6 },
-  strike: { flood: 0.4, damage: 24, grabRange: 10, grabDps: 30, extRange: 12, extDamage: 40 },
+  strike: { flood: 0.4, damage: 24, grabRange: 6, grabWarningSeconds:3, grabDps: 30, extRange: 12, extDamage: 40 },
   decoy: { duration: 18, cooldown: 70 },
   lockdown: { syncSeconds: 8, soloSeconds: 20, decay: 0.12, repeatGap: 100, autoReleaseAfter: 15 },
   // escape
@@ -113,7 +114,7 @@ export function resetPlayerForMatch(p, slot) {
     tasksDone: 0, contribution: 0, credits: {}, escaped: false, ending: null, volunteered: false,
     podRepairAt: 0, suit: TUNING.suitSeconds, stamina: STAMINA.max, winded: false,
     inventory: startingInventory(p.dept), itemReadyAt: 0, lockerReadyAt:0,craftReadyAt:0,flashlight:true,subSeat:null,depth:0,vertical:0,verticalUntil:0,
-    stats:{downs:0,revives:0},lostAt:null,escapedAt:null
+    grabExposure:0,stats:{downs:0,revives:0},lostAt:null,escapedAt:null
   });
 }
 
@@ -737,9 +738,10 @@ export function tickGame(game, players, nowMs = Date.now(), timeScale = 1) {
       const previousBreath=p.breath??FLOODING.breathSeconds;
       p.breath=p.submerged?Math.max(0,previousBreath-dt):Math.min(FLOODING.breathSeconds,previousBreath+dt*FLOODING.breathRecovery);
       if(p.submerged&&p.breath<=0)dps+=T.drownDps;
+      const grab=updateGrabExposure(p.grabExposure,p.exterior&&!p.subSeat&&levHunting&&Math.hypot(p.x-levPos.x,p.z-levPos.z)<T.strike.grabRange,dt,T.strike.grabWarningSeconds);p.grabExposure=grab.exposure;
       if (p.exterior) {
         if(!p.subSeat){p.suit=Math.max(0,p.suit-dt*suitDrain(p.x,p.z,p.depth));if(p.suit<=0)dps+=T.suitEmptyDps;}
-        if (!p.subSeat&&levHunting && Math.hypot(p.x - levPos.x, p.z - levPos.z) < T.strike.grabRange) dps += T.strike.grabDps;
+        if(grab.damaging)dps+=T.strike.grabDps;
       } else {
         p.suit = T.suitSeconds;
         if (game.oxygen <= 0) dps += T.noO2Dps;
@@ -1015,7 +1017,7 @@ export function snapshotGame(game, players, nowMs = Date.now()) {
       downIn: p.downed && !p.lost ? Math.max(0, Math.ceil(TUNING.downTimeout - (game.time - p.downedAt))) : 0,
       left: p.leftBehind, aboard: p.aboard, escaped: !!p.escaped, ending: p.ending, contribution: p.contribution || 0,
       noise: p.subSeat&&Math.abs(game.sub.speed)>.4?80:game.holds.get(p.id)?.gearApplied === 'welder' ? 100 : isRunning(p, nowMs) ? 80 : ['resource','scrap','salvageRecover','salvageInstall'].includes(game.holds.get(p.id)?.mode) ? 65 : p.exterior ? 15 : game.holds.get(p.id) && (game.holds.get(p.id).mode === 'service' || STATIONS[game.holds.get(p.id).id]?.noisy) ? 65 : 0,
-      breath:round(p.breath??FLOODING.breathSeconds,1),submerged:!!p.submerged&&!p.lost&&!p.downed&&!p.escaped&&!p.aboard,ext: p.exterior, conn: p.connected, suit: Math.round(p.suit),
+      contactWarning:!!p.exterior&&isActive(p)&&(p.grabExposure||0)>0,contactIn:Math.max(0,Math.ceil(TUNING.strike.grabWarningSeconds-(p.grabExposure||0))),breath:round(p.breath??FLOODING.breathSeconds,1),submerged:!!p.submerged&&!p.lost&&!p.downed&&!p.escaped&&!p.aboard,ext: p.exterior, conn: p.connected, suit: Math.round(p.suit),
       inventory: [...(p.inventory || [])], itemReadyIn: Math.max(0, Math.ceil((p.itemReadyAt || 0) - game.time)),
       craftReadyIn:Math.max(0,Math.ceil((p.craftReadyAt||0)-game.time)),flashlight:p.flashlight,
       profileId:p.profileId||null,

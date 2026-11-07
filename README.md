@@ -424,3 +424,17 @@ Leaks stay at their initial rate for 45 seconds, then grow gradually to 2.5 time
 Water above the standing helmet height (1.65m) drains a separate 12-second breath reserve before drowning damage starts. Station oxygen cannot replace that trapped reserve underwater. Dry space restores it at three seconds per second; it is not instantly refilled by crossing a doorway. EVA suit air and sub air remain separate systems. A dedicated meter, critical banner and captioned suit warning identify low helmet air. Practice retains its existing safety protections.
 
 Run npm run test:flooding for pure and real-network checks, including client-forged breath refusal, and npm run test:flooding:visual for warning layout/recovery review. The twelve-seed balance sample wins 100% for crews 1-3, 5 and 7, and 92% for crews 4, 6 and 8; human tests still need to assess the difficulty.
+
+### Balance audit and close-contact counterplay
+
+The balance audit now supports BALANCE_REPORT=1 to print loss reasons and observed down contexts, in addition to win rates. These contexts are diagnostic estimates, not authoritative cause-of-death labels. The test crew no longer sends every available member toward the same casualty or attempts inside-only treatment on a downed diver outside. Divers use finite carried lures and attempt to return when contact or suit air becomes dangerous. This remains an approximate travel-time simulation, not a replacement for human playtests.
+
+Continuous Leviathan grab damage now requires sustained close contact: a 6m radius and a three-second warning window. A persistent personal warning/countdown and captioned suit cue announce that danger. Breaking contact decays exposure; quick boundary taps do not instantly reset it. The separate strike impact remains dangerous and keeps its original damage/range. No client can supply an accepted grab timer.
+
+Hearing gain scales gently downward above four crew (1.0 / 0.95 / 0.9 / 0.85 / 0.8 for 4-8), accounting for simultaneous crew noise while preserving the need for quiet. Pump, breach-growth, helmet-air and station oxygen settings were not weakened in this pass.
+
+The 60-seed-per-size audit with the improved test crew wins 100%, 100%, 100%, 98%, 97%, 98%, 88% and 92% for crews 1-8. A deliberately slow/noisy eight-player crew won 0/12 stress runs, usually losing to flooding. These results update the earlier smaller samples and do not imply every player escapes in a winning match.
+
+To reproduce one reported balance failure, set START_SEED to its printed seed and run the simulator with that crew size and one run. Leave START_SEED unset for the standard sample. BALANCE_REPORT prints up to three example failure seeds per crew size.
+
+The final balance audit also reports actual lost players, average escaped crew and full-crew escape rates, and includes preventative treatment in the scripted Medical decisions. See BALANCE-REPORT.md for the final standard and separate-seed results, remaining survival concerns and reproduction steps. These final samples supersede earlier percentages above.

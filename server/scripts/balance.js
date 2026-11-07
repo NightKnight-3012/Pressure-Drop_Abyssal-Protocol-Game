@@ -5,7 +5,7 @@
 // "Sensible" = does the right tasks in a reasonable order, patches breaches, refills oxygen, handles the
 // lockdown and the vote, but is not perfect (walking takes time, reactions are slow). If this crew cannot win,
 // the numbers in server/game.js (TUNING) or shared/layout.js (scaling table) are too harsh.
-import { createGame, tickGame, startHold, castVote, assignDepartments, isActive, TUNING, mulberry32,useItem } from "../game.js";
+import { createGame, tickGame, startHold, castVote, assignDepartments, isActive, cancelHold, TUNING, mulberry32,useItem } from "../game.js";
 import {CIRCUITS} from '../../shared/fieldwork.js';
 import { STATIONS, DEPT_IDS, DOOR_STATION, roomAt } from "../../shared/layout.js";
 import { calibrate, driveFinale } from "./crew-driver.js";
@@ -25,7 +25,7 @@ function simulate(n, seed, { reaction = Number(process.env.REACTION) || 9, runCh
   assignDepartments(players);
   const game = createGame({ players, now: NOW, seed });
   game.holds.clear();
-  const stats = { minO2: 100, maxFlood: 0, lost: 0 };
+  const stats = { minO2: 100, maxFlood: 0, lost: 0,drownDowns:0,airDowns:0,impactDowns:0,otherDowns:0,evaDowns:0,evaAirDowns:0,evaContactDowns:0,electricDowns:0,skitterDowns:0 };
   let overrideTried = false;
 
   const dist = (p, pos) => Math.hypot(p.x - pos.x, p.z - pos.z);
@@ -44,8 +44,14 @@ function simulate(n, seed, { reaction = Number(process.env.REACTION) || 9, runCh
     const events = tickGame(game, players, NOW);
     stats.minO2 = Math.min(stats.minO2, game.oxygen);
     stats.maxFlood = Math.max(stats.maxFlood, ...Object.values(game.rooms).map((r) => r.flood));
-    for (const e of events) if (e.type === "lost") stats.lost++;
+    for (const e of events){if(e.type==='lost')stats.lost++;if(e.type==='down'){const p=players.find(p=>p.id===e.id);const cause=!p.exterior&&p.breath<=0?'drownDowns':!p.exterior&&game.oxygen<=0?'airDowns':events.some(e=>e.type==='impact'&&e.room===roomAt(p.x,p.z))?'impactDowns':'otherDowns';stats[cause]++;if(cause==='otherDowns'){if(p.exterior){stats.evaDowns++;if(p.suit<=0)stats.evaAirDowns++;else stats.evaContactDowns++;}else if(game.threats.electric?.room===roomAt(p.x,p.z)&&game.roomCircuits[roomAt(p.x,p.z)])stats.electricDowns++;else if(game.threats.skitters.some(s=>Math.hypot(s.x-p.x,s.z-p.z)<1))stats.skitterDowns++;}}}
 
+    // Divers react to a nearby hunting contact and use their real, finite lure.
+    const contact={x:Math.cos(game.lev.angle)*game.lev.dist,z:Math.sin(game.lev.angle)*game.lev.dist};
+    for(const p of players)if(isActive(p)&&p.exterior&&(['approach','attack'].includes(game.lev.state)&&dist(p,contact)<18||p.suit<25)&&p.plan?.id!=='airlock_out'&&game.holds.get(p.id)?.id!=='airlock_out'){
+      const decoy=p.inventory.indexOf('decoy');if(decoy>=0)useItem(game,players,p,decoy);
+      cancelHold(game,p.id);p.plan={at:game.time+2+dist(p,front(STATIONS.airlock_out))/WALK,pos:front(STATIONS.airlock_out),id:'airlock_out'};
+    }
     // ---- arrivals
     for (const p of players) {
       if (p.plan && game.time >= p.plan.at && isActive(p)) {
@@ -87,7 +93,7 @@ function simulate(n, seed, { reaction = Number(process.env.REACTION) || 9, runCh
     }
 
     // ---- everyone else works
-    const downed = players.find((p) => p.downed && !p.lost);
+
     const openBreaches = game.breaches.filter((b) => ![...game.holds.values()].some((h) => h.id === b.id) && !players.some((q) => q.plan?.id === b.id));
     for (const p of players) {
       if (!idle(p) || game.time < p.busyUntil) continue;
@@ -103,7 +109,10 @@ function simulate(n, seed, { reaction = Number(process.env.REACTION) || 9, runCh
       if(dangerous&&game.roomCircuits[dangerous]&&!players.some(q=>q.plan?.id===`circuit:${dangerous}`)&&![...game.holds.values()].some(h=>h.id===`circuit:${dangerous}`)){go(p,CIRCUITS[dangerous],`circuit:${dangerous}`);continue;}
       if(game.threats.warden){p.flashlight=false;const lit=Object.keys(CIRCUITS).find(r=>game.roomCircuits[r]&&!players.some(q=>q.plan?.id===`circuit:${r}`)&&![...game.holds.values()].some(h=>h.id===`circuit:${r}`));if(lit){go(p,CIRCUITS[lit],`circuit:${lit}`);continue;}}
       if(game.threats.skitters.some(s=>Math.hypot(s.x-p.x,s.z-p.z)<4)&&!game.effects.some(e=>e.item==='flare'&&Math.hypot(e.x-p.x,e.z-p.z)<5)){const slot=p.inventory.indexOf('flare');if(slot>=0)useItem(game,players,p,slot);}
+      const downed=players.find(q=>q.downed&&!q.lost&&!q.exterior&&!players.some(r=>r.plan?.id==='treat:'+q.id)&&![...game.holds.values()].some(h=>h.id==='treat:'+q.id));
       if (downed && downed !== p) { go(p, { x: downed.x + 0.8, z: downed.z }, "treat:" + downed.id); continue; }
+      const patient=players.find(q=>q!==p&&isActive(q)&&!q.exterior&&q.hp<60&&!players.some(r=>r.plan?.id==='treat:'+q.id)&&![...game.holds.values()].some(h=>h.id==='treat:'+q.id));
+      if(p.dept==='medical'&&game.tasks.lifesupport.done&&patient){go(p,{x:patient.x+.8,z:patient.z},'treat:'+patient.id);continue;}
       if (openBreaches.length && (p.dept === "engineering" || openBreaches.length > 1 || game.rooms.control.flood > 1)) {
         const b = openBreaches.shift(); go(p, { x: b.x + 0.5, z: b.z }, b.id); continue;
       }
@@ -121,19 +130,21 @@ function simulate(n, seed, { reaction = Number(process.env.REACTION) || 9, runCh
     }
   }
   if (game.status === "playing" && process.env.DEBUG_STUCK) console.log(JSON.stringify({ stage: game.stage, tasks: Object.fromEntries(Object.entries(game.tasks).map(([k, v]) => [k, v.done])), lock: game.lockdown, holds: [...game.holds], players: players.map((p) => ({ id: p.id, dept: p.dept, x: +p.x.toFixed(1), z: +p.z.toFixed(1), ext: p.exterior, plan: p.plan && p.plan.id, down: p.downed, lost: p.lost, busy: +p.busyUntil.toFixed(0) })), rooms: game.rooms, vote: game.vote && { k: game.vote.k, ballots: game.vote.ballots }, boarding: game.boarding }, null, 1));
-  return { win: game.status === "win", status: game.status, time: Math.round(game.time), grade: game.outcome?.grade, reason: game.outcome?.reason, aboard: game.outcome?.aboard.length ?? 0, ...stats, lockdownHandled: overrideTried };
+  return { seed,failureStage:game.stage,win: game.status === "win", status: game.status, time: Math.round(game.time), grade: game.outcome?.grade, reason: game.outcome?.reason, aboard: game.outcome?.aboard.length ?? 0, ...stats,lost:players.filter(p=>p.lost).length,escaped:players.filter(p=>p.escaped).length,allEscaped:players.every(p=>p.escaped),podEscaped:game.finale?.pod.status==='escaped', lockdownHandled: overrideTried };
 }
 
 const only = Number(process.argv[2]);
 const seeds = Number(process.argv[3]) || 12;
 const sizes = only ? [only] : [1, 2, 3, 4, 5, 6, 7, 8];
-console.log("players  win%   avg time  min oxygen  max flood  lost  seats  (scripted sensible crew)");
+console.log("players  win%   avg time  min oxygen  max flood  lost  seats  escaped  full%  (scripted sensible crew)");
 let allGood = true;
 for (const n of sizes) {
-  const runs = Array.from({ length: seeds }, (_, i) => simulate(n, 1000 + i * 37 + n));
+  const runs = Array.from({ length: seeds }, (_, i) => simulate(n, (process.env.START_SEED!==undefined?Number(process.env.START_SEED):1000+n) + i * 37));
   const wins = runs.filter((r) => r.win).length;
   const avg = (k) => runs.reduce((s, r) => s + r[k], 0) / runs.length;
-  console.log(`${String(n).padStart(5)}   ${String(Math.round((wins / runs.length) * 100)).padStart(4)}%  ${String(Math.round(avg("time"))).padStart(6)}s  ${avg("minO2").toFixed(0).padStart(9)}%  ${avg("maxFlood").toFixed(2).padStart(9)}m  ${avg("lost").toFixed(1).padStart(4)}  ${String(runs[0].aboard ? "" : "").padStart(1)}${n < 4 ? n : [3, 4, 5, 6, 6][n - 4]}`);
+  console.log(`${String(n).padStart(5)}   ${String(Math.round((wins / runs.length) * 100)).padStart(4)}%  ${String(Math.round(avg("time"))).padStart(6)}s  ${avg("minO2").toFixed(0).padStart(9)}%  ${avg("maxFlood").toFixed(2).padStart(9)}m  ${avg("lost").toFixed(1).padStart(4)}  ${String(runs[0].aboard ? "" : "").padStart(1)}${n < 4 ? n : [3, 4, 5, 6, 6][n - 4]}  ${avg('escaped').toFixed(1).padStart(5)}/${n}  ${Math.round(runs.filter(r=>r.allEscaped).length/runs.length*100).toString().padStart(4)}%`);
+  if(process.env.BALANCE_REPORT){const reasons={};for(const r of runs.filter(r=>!r.win))reasons[r.reason||r.status]=(reasons[r.reason||r.status]||0)+1;console.log('        loss breakdown: '+JSON.stringify(reasons)+' / observed down contexts '+JSON.stringify(Object.fromEntries(['drownDowns','airDowns','impactDowns','otherDowns','evaDowns','evaAirDowns','evaContactDowns','electricDowns','skitterDowns'].map(k=>[k,+avg(k).toFixed(2)]))));}
+  if(process.env.BALANCE_REPORT&&wins<runs.length)console.log('        example seeds: '+JSON.stringify(runs.filter(r=>!r.win).slice(0,3).map(r=>({seed:r.seed,stage:r.failureStage,reason:r.reason}))));
   if (wins / runs.length < 0.8) { allGood = false; const f = runs.find((r) => !r.win); console.log(`        e.g. a lost match: ${f.reason} (t=${f.time}s)`); }
 }
 void TUNING; void DEPT_IDS;

@@ -329,7 +329,7 @@ const SCALE_TABLE = {
   breachInterval: BY_N([44, 40, 36, 31, 28, 25, 22, 20]), // seconds between new hull breaches
   maxBreaches:    BY_N([2, 2, 3, 3, 4, 4, 5, 5]),         // simultaneous breaches
   oxygenDrain:    BY_N([0.22, 0.25, 0.27, 0.30, 0.33, 0.35, 0.38, 0.40]), // % per second
-  noiseGain:      BY_N([0.8, 0.85, 0.9, 1.0, 1.0, 1.0, 1.0, 1.0]),        // Leviathan hearing
+  noiseGain:      BY_N([0.8, 0.85, 0.9, 1.0, 0.95, 0.9, 0.85, 0.8]),        // Leviathan hearing
   lockdowns:      BY_N([0, 1, 1, 1, 1, 1, 2, 2]),
   lockdownAt:     BY_N([999, 110, 110, 105, 95, 90, 80, 75]),             // seconds into the match
   junctions:      BY_N([2, 2, 2, 2, 3, 3, 3, 3])

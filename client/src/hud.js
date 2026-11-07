@@ -362,7 +362,8 @@ export function createHud() {
       setText(el.objective, controlText(objectiveFor(state, me)));
       setText($("mission-chapter"), missionChapter(state));
       let banner = "";
-      if(me?.submerged)banner='SUBMERGED / HELMET AIR '+Math.ceil(me.breath)+'s / REACH DRY SPACE';
+      if(me?.contactWarning)banner=me.contactIn>0?'CLOSE CONTACT / BREAK AWAY NOW / GRAB IN '+me.contactIn+'s':'LEVIATHAN GRAB / BREAK AWAY NOW';
+      else if(me?.submerged)banner='SUBMERGED / HELMET AIR '+Math.ceil(me.breath)+'s / REACH DRY SPACE';
       else if(me?.subSeat&&state.sub?.air<30)banner='SUB AIR LOW / RETURN TO MEDICAL DOCK';
       else if(me?.subSeat&&state.sub?.hull<30)banner='SUB HULL CRITICAL / REPAIR OR ABANDON';
       else if(exteriorNotice(me))banner=exteriorNotice(me);

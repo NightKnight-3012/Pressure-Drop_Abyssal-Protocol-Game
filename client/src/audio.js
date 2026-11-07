@@ -178,6 +178,7 @@ const direction=position=>{
 };
 function cue(name,text,position) { play(name,position);if(text) caption(text); }
 export const sfx={
+  closeContact:()=>cue('warning','[LEVIATHAN CLOSE / BREAK AWAY FROM CONTACT]'),
   drowning:()=>cue('lowAir','[HELMET AIR LOW / REACH A DRY COMPARTMENT]'),
   subHatch:position=>cue('door','[SURVEY SUB HATCH / PRESSURE SEAL]',position),
   subEngine:position=>cue('podBoost','[SURVEY SUB THRUSTERS / ENGINE NOISE CARRIES THROUGH WATER]',position),
