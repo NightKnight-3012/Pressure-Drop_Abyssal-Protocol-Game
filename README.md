@@ -12,7 +12,7 @@ Visuals use free CC0 models by Quaternius and Gobkit alongside original procedur
 
 **Tactical horror update:** the launch now starts a playable pod pursuit alongside a collapsing-station survivor route, with shared noise decisions and personalized endings. See [the updated step-by-step guide and controls](TACTICAL-HORROR.md). On Windows PowerShell use `npm.cmd` in place of `npm` in the commands below.
 
-The latest [release-readiness notes](DEVELOPMENT-NOTES.md) describe the bug fixes, improved surfaces/water/cockpit, graphics settings and remaining development work. Escape now opens the in-game menu; multiplayer continues while it is open.
+See [release status and known limitations](RELEASE-STATUS.md) for the current playtest gates and validation scope. Escape opens the in-game menu; multiplayer continues while it is open.
 
 ## Quick start
 
@@ -319,7 +319,7 @@ During an investigation, the Leviathan can make one short physical listening pas
 
 `test/complication-checks.mjs` covers seed timing, role/crew scaling, validation, cancellation, pump drainage, timeline recording and quiet/noisy encounters. The balance sample above was repeated after this phase with the same win rates. Those crews ignore the obstruction, so the penalty remains survivable without the bonus.
 
-See [DEVELOPMENT.md](DEVELOPMENT.md) for the reviewed feature list and next implementation phase.
+See [RELEASE-STATUS.md](RELEASE-STATUS.md) for implemented features, known limitations and validation requirements.
 
 ### Story and final recovery
 

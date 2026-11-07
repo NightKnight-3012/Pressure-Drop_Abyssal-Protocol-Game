@@ -21,3 +21,15 @@ test/reference-abyssal-review/
 .codex/
 .aws/
 .github-upload/
+
+# Local handoffs, development journals, one-off publishing helpers and generated captures
+AI-GAME-HANDOFF.md
+DEVELOPMENT.md
+DEVELOPMENT-NOTES.md
+REMAINING-WORK.md
+scripts/publish-github.ps1
+scripts/publish-existing-github.ps1
+scripts/publish-new-github.ps1
+test/browser-check.png
+test/leviathan-front.png
+test/leviathan-preview.png

@@ -1,44 +1,44 @@
-# Current release status
+﻿# Release status and known limitations
 
-The planned gameplay phases are implemented as documented MVPs. This is not a claim that every proposed extension or commercial-quality refinement is finished.
+Pressure Drop is a playable 1-8-player co-op horror game. Its planned gameplay phases exist as working MVPs; it is still a playtest build, not a commercially validated release.
 
-## Delivered in the release-polish pass
+## Implemented
 
-- Rolling measured FPS and 95th-percentile frame time in Display & Controls; local measurement only.
-- New installations inherit system reduced motion unless a saved explicit setting overrides it.
-- Supply-locker signs update their interaction key after rebinding.
-- Regression expectations now match the physically mounted, approach-facing room signs.
+- Department repairs/calibrations, flooding/shared pump capacity, station/suit/helmet air, revival, noise-driven Leviathan and lockdowns.
+- Four-slot equipment, department tools, finite lockers, alloy fabrication and validated ground hand-offs.
+- Bounded ocean exploration, depth/pressure, seeded supplies, optional wreck regulator and two-seat SKIFF-2 survey sub.
+- Skitters, electrical hazards, anchored mines and one late Warden, with warnings/counters.
+- Solo practice, evidence/case file, event radio, simultaneous evacuation routes, docking/lift/rescue and personal endings.
+- Private/public rooms, server-local Quick Match, anonymous identities, SQLite results, statistics, leaderboards and basic moderation.
+- Captioned audio, accessibility/graphics options, binding-aware controls, wrist computer and local FPS/p95 diagnostics.
+- Articulated fingers/thumbs and two-bone arm IK for reachable equipment/tool contact. Ten mesh draws, no added world lights/shadows. Distant work and treatment/unsupported props retain free gestures; this is not full-body collision IK.
+- Three authored replacements for existing falling escape hazards, with lane telegraphs and persistent warnings.
 
-The existing project also includes story/case-file progression, role gear and fabrication, optional ocean salvage, depth/pressure, the two-seat survey sub, four counterable hazards, training, both evacuation routes, public crews, persistence and moderation. See README and REMAINING-WORK for the actual limits and test coverage.
+See [README](README.md) for setup/mechanics, [TACTICAL-HORROR](TACTICAL-HORROR.md) for evacuation controls, [ASSETS](ASSETS.md) for provenance and [DEPLOYMENT](DEPLOYMENT.md) for operation.
 
-## Still unfinished or unverified
+## Validation baseline
 
-- Articulated fingers and reachable hand/tool contact are implemented. Distant work and treatment/unsupported props retain animated free poses; this is a first-person rig, not full-body character collision IK.
-- The three existing falling route hazards now have authored gantry/bulkhead/conduit models and lane warnings. Additional collapse encounters or physical debris simulation remain deferred.
-- Gear can now be put down and recovered by teammates; direct trade offers and automatic recovery from lost characters remain deferred.
-- Proximity voice chat, controller support, drifting mines and machinery-targeting skitters remain deferred extensions and have not been implemented.
-- Human playtesting with fresh crews at 1, 3-4 and 8 players is still required. Scripted crews do not evaluate fear, confusion, optional expedition appeal or the moral ending.
-- Hardware frame-rate testing is still required. Software WebGL screenshots do not demonstrate 60 FPS. Use the new measured readout on target devices.
-- Docker is unavailable in this workspace; container building remains unverified. The local production entry/restart has automated coverage.
-- External deployment remains blocked by this session's network access and requires a real hosting destination.
-- The user authorised committing the completed hand work together with this development pass after validation.
+The latest gameplay/hand-rig pass completed the full npm test chain, including 106 original network checks and additional dedicated suites, 185 client simulation checks, 12 existing hand checks plus 11 articulation/contact checks, and a production build. Focused Chrome captures cover equipment, full-crew layout, escape scenery and panel/floor work at 1280x720 and 520x640.
 
-No unfinished item above should be reported as shipped or validated.
+Client simulation uses a stub renderer. Some scenery captures are isolated previews. These are not a complete human playthrough, security audit or hardware performance test. The main bundle still exceeds the build's 500KB warning threshold.
 
-## Current development pass (8 November 2026)
+Across 480 scripted matches, mission win rates were 90-100% at every crew size. A win means at least one escape; full-crew escape remained 0% for seven/eight-player scripted crews. Bots do not exercise all optional activities or hand-offs. See [BALANCE-REPORT](BALANCE-REPORT.md) for methodology, results and reproduction.
 
-Implemented authoritative gear hand-offs with finite charges, room/environment/range checks, cancellable exclusive recovery, crew-scaled loose-item limits and protected regulator cargo. Added keyboard and wrist controls, visible canisters, reach poses and captions. Screenshot review caught and fixed the old wrist-screen rule hiding the new equipment controls. Authored three replacement collapse silhouettes with deterministic essential fall motion, bounded geometry, a one-time authoritative lane telegraph and persistent HUD warning. No extra obstacles or damage were added.
+## Required release checks
 
-Validation results for this pass are recorded in REMAINING-WORK.md. Human crew testing, hardware performance and deployment gates above still apply.
+- Fresh human tests at 1, 3-4 and 8 players: warning clarity, individual survival, useful role/passenger jobs, exploration risk/reward and survivor choices.
+- Hardware performance measurements. Software WebGL screenshots do not establish 60 FPS.
+- Actual Docker build/container deployment verification; Docker was unavailable during development. Local production entry/restart has automated coverage.
+- Reachable hosting, persistent storage, WebSocket/HTTPS configuration and operator moderation before public stranger play.
 
-Final checks passed: full npm test, 184 client checks, production build, ten equipment browser checks/captures and six isolated collapse renders. A 480-match balance rerun retained 90-100% mission wins at every crew size; bots do not exercise hand-offs, and full-crew survival for larger crews remains unresolved. Wrist equipment focus and full-roster scrolling were corrected during review. The existing bundle-size warning remains. No commit or push performed.
+## Deferred extensions and limitations
 
-## Articulated work hands follow-up
+- Proximity voice chat and controller support.
+- Drifting mines and machinery-targeting skitters.
+- Direct trade offers, thrown-item physics and automatic lost-inventory recovery.
+- Full-body IK or contact on every treatment/vehicle prop.
+- Additional collapse encounters and physical debris simulation.
+- Free-depth sub navigation, a larger seamless ocean and procedural station generation.
+- Verified accounts, shared multi-server rooms and mid-match restoration after server restart.
 
-Both gloves now have individually animated fingers/thumbs, with two-bone arm IK and separate support/tool/fingertip contact anchors. Selected station/emergency equipment and supplies use mesh hits; breach/circuit work uses the visible floor face. Low work uses body-relative arm origins that remain correct while looking down. The offset wrench head and fingertip brace avoid pushing the glove through the working plane. Reach remains bounded; distant work, treatment and unsupported props use free gestures. Reduced effects keeps contact but freezes repetitive movement, without changing the camera or authoritative rules. The rig stays within ten mesh draws and adds no world lights or shadows.
-
-The user authorised committing this follow-up and the preceding development pass together. Final validation is recorded in REMAINING-WORK.md; human/hardware/deployment gates remain unchanged.
-
-## Earlier release-polish verification (historical)
-
-Production build, complete npm test chain including 106 network checks, 178 real-client simulation checks, focused frame-stat/control tests and eight practice browser checks/captures passed. Balance: 100% wins at crew sizes 1-5 and 92% at 6-8 across the scripted twelve-seed sample. The existing bundle-size warning remains.
+The sub remains horizontal at survey level; mines are anchored; case-file progress is browser-local; online services are server-local. Anonymous bans can be evaded with a new browser identity. Do not describe deferred or unverified capabilities as shipped.
