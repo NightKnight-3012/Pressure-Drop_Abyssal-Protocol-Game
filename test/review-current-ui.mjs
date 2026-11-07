@@ -59,7 +59,14 @@ try {
   await call("Emulation.setDeviceMetricsOverride", { width:1280,height:720, deviceScaleFactor: 1, mobile: false });
   await call("Page.navigate", { url: "http://127.0.0.1:3996" });
   await wait("document.getElementById('menu-status')?.textContent.includes('ONLINE')"); await capture("menu");
-  if(process.argv.includes('--route-only')){
+  if(process.argv.includes('--flood-only')){
+    await evaluate("document.getElementById('player-name').value='Mara';document.getElementById('practice-start').click()");await wait("document.getElementById('mission-chapter').textContent.includes('SIMULATOR')");
+    const r=[...api.rooms.values()][0];for(let i=0;i<120&&r.phase!=='playing';i++)await sleep(50);await sleep(200);r.phase='visual-fixture';r.game.practice=null;
+    const p=r.matchPlayers[0];Object.assign(p,{x:6,z:-6,breath:5,submerged:true});r.game.rooms.engineering.flood=2.5;r.game.rooms.engineering.closed=true;
+    io.to(p.socketId).emit('player:correct',{x:p.x,z:p.z,rotation:0,teleport:true});io.to(r.code).emit('game:state',snapshotGame(r.game,r.matchPlayers,Date.now()));await wait("document.getElementById('banner').textContent.includes('HELMET AIR')");
+    for(const [width,height] of [[1280,720],[520,640]]){await call('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:1,mobile:false});await capture('presentation-flood-air-'+width);}
+    p.breath=12;p.submerged=false;r.game.rooms.engineering.flood=0;io.to(r.code).emit('game:state',snapshotGame(r.game,r.matchPlayers,Date.now()));await wait("document.getElementById('suit-block').classList.contains('hidden')");checks++;
+  }else if(process.argv.includes('--route-only')){
     await call('Page.navigate',{url:'http://127.0.0.1:3996/route-review'});await wait("typeof previewRoute==='function'");
     for(const at of [30,65,110,165]){await evaluate('previewRoute('+at+')');await capture('presentation-route-'+at);}
   }else if(process.argv.includes('--hands-only')){

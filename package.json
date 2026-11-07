@@ -16,7 +16,7 @@
     "build": "npm run build -w client",
     "start": "node server/index.js",
     "bots": "node server/scripts/bots.js",
-    "test": "npm run test:frame-stats && npm run test:control-hints && npm run test:route-polish && npm run test:creature-polish && npm run test:boards && node test/dock-accessibility.mjs && npm run test:hands && npm run test:online && node test/practice-checks.mjs && node test/practice-net.mjs && node test/sub-depth-checks.mjs && node test/sub-net.mjs && node test/fieldwork-checks.mjs && node test/fieldwork-net.mjs && node test/story-controls-checks.mjs && node test/salvage-checks.mjs && node test/survey-checks.mjs && node test/resource-checks.mjs && node test/locker-checks.mjs && node test/equipment-checks.mjs && node test/role-gear-checks.mjs && node test/complication-checks.mjs && node test/release-checks.mjs && node test/performance-checks.mjs && node test/station-checks.mjs && node test/presentation-checks.mjs && node test/expansion-checks.mjs && node test/audio-checks.mjs && node test/escape-craft-checks.mjs && node test/ocean-checks.mjs && node server/scripts/test-rules.js && node server/scripts/test-tactical.js && node server/scripts/test-net.js",
+    "test": "npm run test:flooding && npm run test:frame-stats && npm run test:control-hints && npm run test:route-polish && npm run test:creature-polish && npm run test:boards && node test/dock-accessibility.mjs && npm run test:hands && npm run test:online && node test/practice-checks.mjs && node test/practice-net.mjs && node test/sub-depth-checks.mjs && node test/sub-net.mjs && node test/fieldwork-checks.mjs && node test/fieldwork-net.mjs && node test/story-controls-checks.mjs && node test/salvage-checks.mjs && node test/survey-checks.mjs && node test/resource-checks.mjs && node test/locker-checks.mjs && node test/equipment-checks.mjs && node test/role-gear-checks.mjs && node test/complication-checks.mjs && node test/release-checks.mjs && node test/performance-checks.mjs && node test/station-checks.mjs && node test/presentation-checks.mjs && node test/expansion-checks.mjs && node test/audio-checks.mjs && node test/escape-craft-checks.mjs && node test/ocean-checks.mjs && node server/scripts/test-rules.js && node server/scripts/test-tactical.js && node server/scripts/test-net.js",
     "test:survey": "node test/survey-checks.mjs",
     "test:survey:visual": "node test/review-current-ui.mjs --station-only --survey-only",
     "test:resources": "node test/resource-checks.mjs",
@@ -63,7 +63,9 @@
     "test:route-polish": "node test/route-polish.mjs",
     "test:route-polish:visual": "node test/build-route-preview.mjs && node test/review-current-ui.mjs --route-only",
     "test:control-hints": "node test/control-hints.mjs",
-    "test:frame-stats": "node test/frame-stats.mjs"
+    "test:frame-stats": "node test/frame-stats.mjs",
+    "test:flooding": "node test/flooding-checks.mjs && node test/flooding-net.mjs",
+    "test:flooding:visual": "node test/review-current-ui.mjs --flood-only"
   },
   "devDependencies": {
     "concurrently": "^9.1.2",

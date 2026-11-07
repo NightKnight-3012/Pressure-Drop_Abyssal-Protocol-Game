@@ -414,3 +414,13 @@ Work alignment: visible gloves make a small, bounded adjustment toward the curre
 Control guidance now follows saved key bindings in the suit HUD, pause and briefing hints, current objectives and survey-sub help. Swapped keys are substituted once, and reset restores original labels while preserving hint formatting. World-mounted signs may still show default controls.
 
 Release diagnostics: Display & Controls shows rolling measured FPS and 95th-percentile frame time during a match. Measurements stay in this browser and are not telemetry or a hardware performance guarantee. New browser installations inherit the system reduced-motion preference unless an explicit preference is saved. Supply-locker plates refresh when the interaction binding changes.
+
+### Flooding and helmet air
+
+The flood pump has one shared station drainage budget, scaled by the existing crew breach tier, rather than independently draining each room at full capacity. It distributes drainage across the water actually present; dry rooms waste no capacity. Multiple leaks can overwhelm it. Filter servicing and the wreck regulator improve that shared capacity. Isolating a flooded compartment stops equalisation into open rooms, but does not patch its breaches.
+
+Leaks stay at their initial rate for 45 seconds, then grow gradually to 2.5 times that rate over the next 90 seconds. Patching removes the leak; pipe clamps stop inflow temporarily while the underlying rupture continues to age. The HUD warns when incoming water exceeds an operating pump and when an old leak worsens. Boarding still increases inflow.
+
+Water above the standing helmet height (1.65m) drains a separate 12-second breath reserve before drowning damage starts. Station oxygen cannot replace that trapped reserve underwater. Dry space restores it at three seconds per second; it is not instantly refilled by crossing a doorway. EVA suit air and sub air remain separate systems. A dedicated meter, critical banner and captioned suit warning identify low helmet air. Practice retains its existing safety protections.
+
+Run npm run test:flooding for pure and real-network checks, including client-forged breath refusal, and npm run test:flooding:visual for warning layout/recovery review. The twelve-seed balance sample wins 100% for crews 1-3, 5 and 7, and 92% for crews 4, 6 and 8; human tests still need to assess the difficulty.

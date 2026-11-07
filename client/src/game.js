@@ -639,6 +639,7 @@ function step() {
   }
 
   // ---- prompts
+  if(me?.submerged&&me.breath<=6&&now-(G.lastBreathWarn??-Infinity)>6000){G.lastBreathWarn=now;sfx.drowning();}
   const mine = myHold();
   const workTarget=mine?nearestTarget():null,workPoint=workTarget?.st||workTarget?.b||workTarget?.o||workTarget?.point;
   G.workHands.update(workPose({hold:mine,working:G.holdWanted&&workTarget?.id===mine?.id,blocked:!canAct()||G.phase!=='playing'||!!G.epilogue||G.viewPod||!!G.lockerId||G.consoleOpen||G.votingShown||document.body.classList.contains('wrist-open'),player:me,stage:state.stage,aim:workAim(workPoint,camera.position,G.input.yaw,G.input.pitch)}),dt,reduced);

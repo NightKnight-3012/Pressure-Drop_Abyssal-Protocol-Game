@@ -36,6 +36,7 @@ export function objectiveFor(state, me) {
   if (me?.lost || me?.escaped) return "You are a spectator: your route has ended. TAB follows the remaining crew; the radio link stays open.";
   if (me?.down) return "You are down. Call your crew for a rescue.";
   if(state.practice)return practiceGuidance(state);
+  if(me?.submerged)return 'SUBMERGED / Reach dry space before helmet air runs out. Seal the room and patch leaks once safe.';
   if(me?.subSeat)return me.subSeat==='driver'?'SURVEY PILOT / W/S thrust, A/D steer. Return to the marked west Medical dock, stop and hold E to transfer the crew inside. Engine noise attracts contact.':'SURVEY OPERATOR / X deploys a limited flare; T scans a last-known contact. Tell the pilot when air or hull is low. V takes an unattended pilot seat.';
   if (state.stage === "finale") {
     if (me?.aboard && state.finale.pod.phase === "sealing") return "CLAMPS LOCKED: the shutter is closing behind you. Keep the hull stable until the seal holds.";
@@ -309,7 +310,11 @@ export function createHud() {
       setText(el.o2Value, `${Math.round(state.oxygen)}%`);
       el.o2Fill.style.width = `${state.oxygen}%`;
       setClass(el.o2Fill, "low", state.oxygen < 25);
-      setClass(el.suitBlock, "hidden", !me?.ext||!!me?.subSeat);
+      const breathVisible=!me?.ext&&!me?.subSeat&&!me?.aboard&&!me?.escaped&&!me?.lost&&(me?.submerged||me?.breath<12);
+      setClass(el.suitBlock, 'hidden', (!me?.ext&&!breathVisible)||!!me?.subSeat);
+      el.suitBlock.querySelector('.meter-caption span').textContent=breathVisible?'HELMET AIR / FIND DRY SPACE':'SUIT OXYGEN';
+      if(breathVisible){setText(el.suitValue,Math.ceil(me.breath)+'s');el.suitFill.style.width=(me.breath/12*100)+'%';}
+      setClass(el.suitFill,'low',breathVisible&&me.breath<6);
       if (me?.ext&&!me.subSeat) { setText(el.suitValue, `${me.suit}s${me.depth>.1?' / '+me.depth.toFixed(1)+'m':''}`); el.suitFill.style.width = `${(me.suit / 90) * 100}%`; }
       const floodPct = Math.min(100, (depth / FLOOD_MAX) * 100);
       setText(el.floodValue, `${Math.round(floodPct)}%`);
@@ -357,7 +362,8 @@ export function createHud() {
       setText(el.objective, controlText(objectiveFor(state, me)));
       setText($("mission-chapter"), missionChapter(state));
       let banner = "";
-      if(me?.subSeat&&state.sub?.air<30)banner='SUB AIR LOW / RETURN TO MEDICAL DOCK';
+      if(me?.submerged)banner='SUBMERGED / HELMET AIR '+Math.ceil(me.breath)+'s / REACH DRY SPACE';
+      else if(me?.subSeat&&state.sub?.air<30)banner='SUB AIR LOW / RETURN TO MEDICAL DOCK';
       else if(me?.subSeat&&state.sub?.hull<30)banner='SUB HULL CRITICAL / REPAIR OR ABANDON';
       else if(exteriorNotice(me))banner=exteriorNotice(me);
       else if (state.stage === "boarding") banner = `POD LAUNCH IN ${state.boarding?.endsIn ?? 0}s`;
@@ -365,6 +371,8 @@ export function createHud() {
       else if (state.oxygen < 15) banner = "⚠ OXYGEN CRITICAL ⚠";
       else if(state.stage==='main'&&state.threats?.electric?.room===me?.room&&!me?.ext&&state.roomCircuits?.[me.room]&&state.rooms[me.room].flood>.15&&!(state.empRooms?.[me.room]>state.t))banner='LIVE WATER / ISOLATE CIRCUIT OR LEAVE';
       else if(state.stage==='main'&&me?.ext&&state.threats?.mines.some(m=>m.active&&Math.hypot(m.x-me.x,m.z-me.z)<3.5))banner='MINE SENSOR / LIGHT OFF AND BACK AWAY';
+      else if(state.stage==='main'&&state.flooding?.inflow>state.flooding?.capacity&&state.power&&state.stations.pump==='done')banner='PUMP OVERLOADED / PATCH LEAKS AND ISOLATE FLOODED ROOMS';
+      else if(state.stage==='main'&&state.breaches.some(b=>b.severity>=1.5))banner='HULL LEAK WORSENING / PATCH THE RUPTURE';
       else if(state.stage==='main'&&state.threats?.warden)banner='LIGHT HUNTER / DARKEN CIRCUITS OR USE FLARE';
       setClass(el.banner, "hidden", !banner);
       if (banner) setText(el.banner, banner);

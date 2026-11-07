@@ -171,7 +171,7 @@ section("flooding, breaches, pump, doors");
   for (const r of ROOM_IDS) g5.game.rooms[r].flood = 1.0;
   g5.game.nextBreachAt = 9999;
   run(g5.game, g5.players, 10);
-  check("powered pump drains every room", ROOM_IDS.every((r) => g5.game.rooms[r].flood < 0.6), String(g5.game.rooms.control.flood));
+  check("powered pump drains every room", ROOM_IDS.every((r) => Math.abs(g5.game.rooms[r].flood-0.8)<.001), String(g5.game.rooms.control.flood));
   const g6 = mk(4);
   g6.game.tasks.pump.done = true; // pump 'repaired' but power off
   for (const r of ROOM_IDS) g6.game.rooms[r].flood = 1.0;
@@ -212,7 +212,7 @@ section("oxygen, drowning, health, revive");
   const g2 = mk(4); g2.game.nextBreachAt = 9999;
   const d = g2.players[0]; put(d, { x: -6, z: -7 });
   g2.game.rooms.control.flood = 2.6; g2.game.rooms.control.closed = true;
-  run(g2.game, g2.players, 14);
+  run(g2.game, g2.players, 26);
   check("deep water drowns: player goes down", d.downed && d.hp === 0);
   check("downed players cannot act", /can't do that/.test(hold(g2.game, g2.players, d, "power") || ""));
   // revive

@@ -1,3 +1,4 @@
+import {FLOODING,breachSeverity,pumpCapacity,drainShared} from './flooding.js';
 // Pure game-rule logic (no sockets in here). The server owns all of this state:
 // clients can only *ask* for things and the server decides what actually happens.
 //
@@ -25,6 +26,7 @@ import {PRACTICE_STEPS} from '../shared/practice.js';
 export {controlSub as subControl,subAction} from './submersible.js';
 
 export const TUNING = {
+  flooding:FLOODING,
   items: ITEM_TUNING,
   resources: { hold:2, noise:.9 },
   salvage: { recover:3, install:4, noise:1.2, bonus:SALVAGE.bonus },
@@ -34,7 +36,7 @@ export const TUNING = {
   complication: { startMin: 55, startSpread: 35, hold: 6, cloggedPump: .85, servicedPump: 1.1 },
   // flooding
   breachRate: 0.035,        // metres of water per second, per breach
-  pumpRate: 0.04,           // drained from every room while the pump runs (about 4 open breaches outpace it)
+  pumpRate: 0.04,           // shared station capacity, scaled by the crew breach tier
   equalizeK: 0.18,          // water spreads between rooms whose doors are open
   firstBreachAt: 10,
   // body
@@ -107,7 +109,7 @@ export function resetPlayerForMatch(p, slot) {
   const s = spawnPoint(slot);
   Object.assign(p, {
     slot, x: s.x, z: s.z, rotation: Math.atan2(s.x, s.z), running: false, exterior: false,
-    hp: MAX_HP, downed: false, downedAt: 0, lost: false, leftBehind: false, aboard: false,
+    breath:FLOODING.breathSeconds, submerged:false, hp: MAX_HP, downed: false, downedAt: 0, lost: false, leftBehind: false, aboard: false,
     tasksDone: 0, contribution: 0, credits: {}, escaped: false, ending: null, volunteered: false,
     podRepairAt: 0, suit: TUNING.suitSeconds, stamina: STAMINA.max, winded: false,
     inventory: startingInventory(p.dept), itemReadyAt: 0, lockerReadyAt:0,craftReadyAt:0,flashlight:true,subSeat:null,depth:0,vertical:0,verticalUntil:0,
@@ -584,9 +586,9 @@ function addBreach(game, room, events, force = false) {
 
 function stepFlood(game, dt) {
   const leakFactor = game.stage === "boarding" ? TUNING.boardLeakFactor : 1;
-  for (const b of game.breaches) if(!(b.clampedUntil>game.time)) game.rooms[b.room].flood += TUNING.breachRate * leakFactor * MISSIONS[game.mission].leak * dt;
+  for (const b of game.breaches) if(!(b.clampedUntil>game.time)) game.rooms[b.room].flood += TUNING.breachRate * breachSeverity(b,game.time) * leakFactor * MISSIONS[game.mission].leak * dt;
   const pumpFactor = (game.complication.state === 'active' ? TUNING.complication.cloggedPump : game.complication.state === 'resolved' ? TUNING.complication.servicedPump : 1) + (game.salvage.state==='installed'?TUNING.salvage.bonus:0);
-  if (powerOn(game) && game.tasks.pump.done && (!game.finale || game.finale.station.power > 0)) for (const r of ROOM_IDS) game.rooms[r].flood -= TUNING.pumpRate * pumpFactor * dt;
+  if (powerOn(game) && game.tasks.pump.done && (!game.finale || game.finale.station.power > 0)) drainShared(game.rooms,pumpCapacity(game.scale,TUNING.pumpRate)*pumpFactor,dt);
   const open = ROOM_IDS.filter((r) => !game.rooms[r].closed);
   if (open.length > 1) {
     const mean = open.reduce((s, r) => s + game.rooms[r].flood, 0) / open.length;
@@ -731,7 +733,10 @@ export function tickGame(game, players, nowMs = Date.now(), timeScale = 1) {
     if (p.lost) continue;
     if (!p.downed && p.connected && !p.aboard && !p.escaped) {
       let dps = 0;
-      if (depthAt(game, p) > DROWN_DEPTH) dps += T.drownDps;
+      p.submerged=!p.exterior&&!p.aboard&&!p.subSeat&&depthAt(game,p)>DROWN_DEPTH;
+      const previousBreath=p.breath??FLOODING.breathSeconds;
+      p.breath=p.submerged?Math.max(0,previousBreath-dt):Math.min(FLOODING.breathSeconds,previousBreath+dt*FLOODING.breathRecovery);
+      if(p.submerged&&p.breath<=0)dps+=T.drownDps;
       if (p.exterior) {
         if(!p.subSeat){p.suit=Math.max(0,p.suit-dt*suitDrain(p.x,p.z,p.depth));if(p.suit<=0)dps+=T.suitEmptyDps;}
         if (!p.subSeat&&levHunting && Math.hypot(p.x - levPos.x, p.z - levPos.z) < T.strike.grabRange) dps += T.strike.grabDps;
@@ -974,11 +979,12 @@ export function snapshotGame(game, players, nowMs = Date.now()) {
   return {
     t: Math.round(game.time), status: game.status, stage: game.stage, outcome: game.outcome, mission: game.mission,
     calibrations: game.calibrations, capsuleDiscovered: game.capsuleDiscovered, finale: finaleSnapshot(game),
+    flooding:{capacity:powerOn(game)&&game.tasks.pump.done&&(!game.finale||game.finale.station.power>0)?round(pumpCapacity(game.scale,TUNING.pumpRate)*((game.complication.state==='active'?TUNING.complication.cloggedPump:game.complication.state==='resolved'?TUNING.complication.servicedPump:1)+(game.salvage.state==='installed'?TUNING.salvage.bonus:0)),3):0,inflow:round(game.breaches.reduce((sum,b)=>sum+(b.clampedUntil>game.time?0:TUNING.breachRate*breachSeverity(b,game.time)*MISSIONS[game.mission].leak*(game.stage==='boarding'?TUNING.boardLeakFactor:1)),0),3)},
     power: powerOn(game), oxygen: round(game.oxygen, 1),
     seats: game.seats, startCount: game.startCount,
     rooms: Object.fromEntries(ROOM_IDS.map((r) => [r, { flood: round(game.rooms[r].flood, 3), closed: game.rooms[r].closed, locked: game.rooms[r].locked, impacts:game.rooms[r].impacts||0 }])),
     hub: round(hubLevel(game), 3),
-    breaches: game.breaches.map((b) => ({ id: b.id, room: b.room, x: b.x, z: b.z,clampedIn:Math.max(0,Math.ceil((b.clampedUntil||0)-game.time)) })),
+    breaches: game.breaches.map((b) => ({ id: b.id, room: b.room, x: b.x, z: b.z,severity:round(breachSeverity(b,game.time),2),clampedIn:Math.max(0,Math.ceil((b.clampedUntil||0)-game.time)) })),
     stations, holds, complication: { state: game.complication.state },
     lockers: Object.fromEntries(Object.entries(game.lockers).map(([id,stock])=>[id,{...stock}])),
     resources: game.resources.map(r=>({...r})),
@@ -1009,7 +1015,7 @@ export function snapshotGame(game, players, nowMs = Date.now()) {
       downIn: p.downed && !p.lost ? Math.max(0, Math.ceil(TUNING.downTimeout - (game.time - p.downedAt))) : 0,
       left: p.leftBehind, aboard: p.aboard, escaped: !!p.escaped, ending: p.ending, contribution: p.contribution || 0,
       noise: p.subSeat&&Math.abs(game.sub.speed)>.4?80:game.holds.get(p.id)?.gearApplied === 'welder' ? 100 : isRunning(p, nowMs) ? 80 : ['resource','scrap','salvageRecover','salvageInstall'].includes(game.holds.get(p.id)?.mode) ? 65 : p.exterior ? 15 : game.holds.get(p.id) && (game.holds.get(p.id).mode === 'service' || STATIONS[game.holds.get(p.id).id]?.noisy) ? 65 : 0,
-      ext: p.exterior, conn: p.connected, suit: Math.round(p.suit),
+      breath:round(p.breath??FLOODING.breathSeconds,1),submerged:!!p.submerged&&!p.lost&&!p.downed&&!p.escaped&&!p.aboard,ext: p.exterior, conn: p.connected, suit: Math.round(p.suit),
       inventory: [...(p.inventory || [])], itemReadyIn: Math.max(0, Math.ceil((p.itemReadyAt || 0) - game.time)),
       craftReadyIn:Math.max(0,Math.ceil((p.craftReadyAt||0)-game.time)),flashlight:p.flashlight,
       profileId:p.profileId||null,
