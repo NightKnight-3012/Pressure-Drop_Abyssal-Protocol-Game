@@ -38,6 +38,7 @@ export const net = {
   door: (room) => socket.emit("door:toggle", { room }),
   decoy: () => socket.emit("decoy:launch"),
   item: slot => socket.emit('item:use', { slot }),
+  drop: slot => socket.emit('item:drop', { slot }),
   take: (locker,item) => socket.emit('locker:take',{locker,item}),
   craft:recipe=>socket.emit('craft:make',{recipe}),
   circuit:room=>socket.emit('circuit:toggle',{room}),

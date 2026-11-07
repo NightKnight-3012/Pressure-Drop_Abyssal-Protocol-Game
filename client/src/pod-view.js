@@ -13,6 +13,7 @@ import { createWreckage } from "./wreckage.js";
 import { createPodMonitor } from "./pod-monitor.js";
 import {routeFrame} from '../../shared/escape-route.js';
 import {createRouteScenery} from './route-scenery.js';
+import {createCollapseSection,collapsePose} from './collapse-section.js';
 
 export function createPodView() {
   const surfaces = createSurfaces(); let time = 0;
@@ -110,16 +111,16 @@ export function createPodView() {
         seen.add(gate.at);
         let mesh = wrecks.get(gate.at);
         if (!mesh) {
-          mesh = createWreckage(wreckMat, warningMat, gate.at);
+          mesh = gate.kind==='falling'?createCollapseSection(wreckMat,warningMat,gate.at):createWreckage(wreckMat, warningMat, gate.at);
           mesh.rotation.y = gate.lane * 0.12;
           mesh.userData.lane = gate.lane;
           scene.add(mesh); wrecks.set(gate.at, mesh);
         }
         const frame=routeFrame(gate.at),ahead=gate.at-progress;
         mesh.rotation.y=frame.yaw+gate.lane*.12;
-        const fall=gate.kind==='falling'?8*(1-THREE.MathUtils.smoothstep(10-ahead,0,6)):0;
+        const collapse=gate.kind==='falling'?collapsePose(ahead,reduced):null,fall=collapse?.height||0;
         mesh.position.set(frame.x+gate.lane * 4, frame.y-1+fall, 8 - ahead * POD_VISUAL_SCALE);
-        mesh.rotation.z=gate.kind==='falling'?(reduced?0:Math.sin(Math.max(0,10-ahead)*.4)*.09):0;
+        mesh.rotation.z=collapse?.roll||0;
       }
       for (const [at, mesh] of wrecks) {
         mesh.position.z = 8 - (at - progress) * POD_VISUAL_SCALE;

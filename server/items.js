@@ -1,6 +1,6 @@
 // Definitions are separate from the pure game rules; clients cannot choose these values.
 export const ITEM_TUNING = Object.freeze({
-  cooldown: 3, flareSeconds: 24, flareNoise: 1.4, lureSeconds: 10,
+  cooldown: 3, dropCooldown:1, pickupSeconds:1, dropsPerCrew:4, flareSeconds: 24, flareNoise: 1.4, lureSeconds: 10,
   lureCooldown: 16, repairFactor: .5, maxEffects: 8,
   welderFactor: .35, welderNoise: 2.8,
   scanSeconds: 6, scanCooldown: 25, scanPulseSeconds: 1.5, scanNoise: 3.5,

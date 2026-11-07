@@ -3,6 +3,7 @@ import { options, DEFAULT_BINDINGS, onOptionsChange } from "./options.js";
 export function canonicalKey(code,bindings=options.bindings){const action=Object.keys(DEFAULT_BINDINGS).find(a=>bindings[a]===code);return action?DEFAULT_BINDINGS[action]:Object.values(DEFAULT_BINDINGS).includes(code)?null:code;}
 
 const GAME_KEYS = new Set(["KeyW", "KeyA", "KeyS", "KeyD", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space", "ShiftLeft", "ShiftRight", "Tab"]);
+GAME_KEYS.add('Backspace');
 for(const code of ['ControlLeft','ControlRight','KeyE','KeyF','KeyR','KeyQ','KeyX','KeyT','KeyV','KeyP','Digit1','Digit2','Digit3','Digit4'])GAME_KEYS.add(code);
 const isTyping = (e) => e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA" || e.target.isContentEditable || e.target.closest?.('[contenteditable="true"]'));
 
@@ -21,7 +22,8 @@ export function createInput(canvas, handlers) {
     const code=canonicalKey(e.code);if(!code)return;
     const podShortcut = enabled && (document.body.classList.contains("in-pod")||document.body.classList.contains('in-sub')) && /^(Key[WASDQXVTRFE]|Arrow(Up|Down|Left|Right)|Shift(Left|Right))$/.test(code);
     const lockerShortcut = enabled && document.body.classList.contains('locker-open') && /^(Key[WASDEQXF]|Digit[1-4]|Arrow(Up|Down|Left|Right)|Shift(Left|Right))$/.test(code);
-    if (e.target?.closest?.("select") || e.target?.closest?.("button") && !podShortcut && !lockerShortcut) {
+    const gearShortcut=enabled&&e.target?.closest?.('#gear')&&['Tab','Backspace','KeyQ','KeyX'].includes(code);
+    if (e.target?.closest?.("select") || e.target?.closest?.("button") && !podShortcut && !lockerShortcut && !gearShortcut) {
       if (e.code === "Escape") handlers.onKey?.(e.code, e);
       return;
     }

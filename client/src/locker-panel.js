@@ -17,7 +17,7 @@ export function createLockerPanel(take,closed,craft=()=>{}) {
       const focused=list.contains(document.activeElement)?document.activeElement.dataset.item:null;
       document.getElementById('locker-title').textContent=LOCKERS[id].label;
       document.getElementById('locker-capacity').textContent=`${free}/${ITEM_LIMIT} FREE SLOTS / STOCK SHARED BY THE CREW`;
-      document.getElementById('locker-note').textContent=me?.lockerReadyIn ? `DISPENSING / READY IN ${me.lockerReadyIn}s` : !Object.values(stock).some(n=>n>0) ? 'Stores exhausted. These supplies do not regenerate.' : !free ? 'Inventory full. Use a tool first; taking never replaces carried gear.' : 'Choose one supply. It fills your first empty slot. Stock resets next match.';
+      document.getElementById('locker-note').textContent=me?.lockerReadyIn ? `DISPENSING / READY IN ${me.lockerReadyIn}s` : !Object.values(stock).some(n=>n>0) ? 'Stores exhausted. These supplies do not regenerate.' : !free ? 'Inventory full. Put down selected gear with Backspace or use a tool; taking never replaces carried gear.' : 'Choose one supply. It fills your first empty slot. Stock resets next match.';
       list.replaceChildren(...Object.entries(stock).map(([item,count])=>{
         const button=document.createElement('button');button.className='secondary locker-item';button.dataset.item=item;
         button.textContent=`${ITEMS[item].label} / ${count} LEFT / TAKE 1`;

@@ -8,14 +8,14 @@ import { Server } from "socket.io";
 import { io as connect } from "socket.io-client";
 import { attachGame } from "../server/net.js";
 import {createRepository} from "../server/db.js";
-import { snapshotGame, useItem, buildSummary, takeLockerItem, startHold, cancelHold } from "../server/game.js";
+import { snapshotGame, useItem, buildSummary, takeLockerItem, startHold, cancelHold, dropItem } from "../server/game.js";
 import { recordEvents } from '../server/timeline.js';
 
 const artifacts = resolve("test/artifacts"); await mkdir(artifacts, { recursive: true });
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const server = http.createServer(async (req, res) => {
   const path = new URL(req.url, "http://localhost").pathname;
-  if(process.argv.includes('--route-only')&&path==='/route-review'){res.setHeader('Content-Type','text/html');return res.end(await readFile(resolve('test/artifacts/route-preview.html')));}
+  if((process.argv.includes('--route-only')||process.argv.includes('--collapse-only'))&&path==='/route-review'){res.setHeader('Content-Type','text/html');return res.end(await readFile(resolve('test/artifacts/route-preview.html')));}
   const file = resolve("client/dist", "." + (path === "/" ? "/index.html" : path));
   if (!file.startsWith(resolve("client/dist") + "/") && !file.startsWith(resolve("client/dist") + "\\")) { res.writeHead(403); return res.end(); }
   try {
@@ -59,7 +59,30 @@ try {
   await call("Emulation.setDeviceMetricsOverride", { width:1280,height:720, deviceScaleFactor: 1, mobile: false });
   await call("Page.navigate", { url: "http://127.0.0.1:3996" });
   await wait("document.getElementById('menu-status')?.textContent.includes('ONLINE')"); await capture("menu");
-  if(process.argv.includes('--flood-only')||process.argv.includes('--contact-only')){
+  if(process.argv.includes('--gear-only')){
+    await evaluate("document.getElementById('player-name').value='Mara';document.getElementById('practice-start').click()");await wait("document.getElementById('mission-chapter').textContent.includes('SIMULATOR')");
+    const r=[...api.rooms.values()][0];for(let i=0;i<120&&r.phase!=='playing';i++)await sleep(50);await sleep(200);r.phase='visual-fixture';r.game.practice=null;
+    const p=r.matchPlayers[0];Object.assign(p,{x:6,z:-8});const dropError=dropItem(r.game,r.matchPlayers,p,0);if(dropError)throw Error(dropError);p.z=-6.6;
+    io.to(p.socketId).emit('player:correct',{x:p.x,z:p.z,rotation:0,teleport:true});
+    const reviewState=snapshotGame(r.game,r.matchPlayers,Date.now());
+    // Layout-only settled crew entries exercise the full roster without adding live actors.
+    for(let i=1;i<8;i++)reviewState.players.push({...reviewState.players[0],id:`layout:${i}`,name:`Crew ${i}`,lost:true});
+    io.to(r.code).emit('game:state',reviewState);await wait("document.getElementById('interaction').textContent.includes('TAKE FLARE')");
+    for(const [width,height] of [[1280,720],[520,640]]){
+      await call('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:1,mobile:false});
+      await capture('presentation-gear-recovery-'+width);
+      await tap('Tab');await wait("document.body.classList.contains('wrist-open')");
+      await evaluate("document.querySelectorAll('#gear-slots button')[1].click()");await wait("document.getElementById('gear-drop').textContent.includes('ACOUSTIC LURE')");
+      const bounds=await evaluate("(()=>{const a=document.getElementById('gear').getBoundingClientRect(),b=document.querySelector('.meters').getBoundingClientRect(),drop=document.getElementById('gear-drop');return {left:a.left,right:a.right,top:a.top,bottom:a.bottom,visible:a.width>0&&a.height>0&&getComputedStyle(drop).display!=='none'&&!drop.disabled,overlap:a.left<b.right&&a.right>b.left&&a.top<b.bottom&&a.bottom>b.top};})()");
+      if(!bounds.visible||bounds.overlap)throw Error('Equipment hidden or overlaps vital meters: '+JSON.stringify(bounds));
+      if(await evaluate("(()=>{const a=document.getElementById('gear').getBoundingClientRect(),roster=document.getElementById('roster'),b=roster.getBoundingClientRect();return getComputedStyle(roster).display!=='none'&&a.left<b.right&&a.right>b.left&&a.top<b.bottom&&a.bottom>b.top;})()"))throw Error('Equipment overlaps full crew roster');
+      if(bounds.left<0||bounds.right>width||bounds.top<0||bounds.bottom>height)throw Error('Gear leaves viewport');checks++;
+      await capture('presentation-gear-wrist-'+width);
+      await evaluate("document.getElementById('wrist-crew').click()");await wait("getComputedStyle(document.getElementById('roster')).display!=='none'");
+      if(await evaluate("(()=>{const a=document.getElementById('gear').getBoundingClientRect(),b=document.getElementById('roster').getBoundingClientRect();return a.left<b.right&&a.right>b.left&&a.top<b.bottom&&a.bottom>b.top;})()"))throw Error('Full crew wrist view overlaps equipment');checks++;
+      await capture('presentation-gear-full-crew-'+width);await tap('Tab');
+    }
+  }else if(process.argv.includes('--flood-only')||process.argv.includes('--contact-only')){
     await evaluate("document.getElementById('player-name').value='Mara';document.getElementById('practice-start').click()");await wait("document.getElementById('mission-chapter').textContent.includes('SIMULATOR')");
     const r=[...api.rooms.values()][0];for(let i=0;i<120&&r.phase!=='playing';i++)await sleep(50);await sleep(200);r.phase='visual-fixture';r.game.practice=null;
     const p=r.matchPlayers[0];Object.assign(p,{x:6,z:-6,breath:5,submerged:true});r.game.rooms.engineering.flood=2.5;r.game.rooms.engineering.closed=true;
@@ -67,9 +90,33 @@ try {
     for(const [width,height] of [[1280,720],[520,640]]){await call('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:1,mobile:false});await capture('presentation-flood-air-'+width);}
     if(process.argv.includes('--contact-only')){p.exterior=true;p.x=14;p.z=0;p.grabExposure=1.5;p.breath=12;p.submerged=false;io.to(p.socketId).emit('player:correct',{x:p.x,z:p.z,rotation:0,teleport:true});io.to(r.code).emit('game:state',snapshotGame(r.game,r.matchPlayers,Date.now()));await wait("document.getElementById('banner').textContent.includes('CLOSE CONTACT')");await capture('presentation-contact-warning-520');}
     p.exterior=false;p.grabExposure=0;p.breath=12;p.submerged=false;r.game.rooms.engineering.flood=0;io.to(r.code).emit('game:state',snapshotGame(r.game,r.matchPlayers,Date.now()));await wait("document.getElementById('suit-block').classList.contains('hidden')");checks++;
+  }else if(process.argv.includes('--collapse-only')){
+    await call('Page.navigate',{url:'http://127.0.0.1:3996/route-review'});await wait("typeof previewCollapse==='function'");
+    for(const at of [42,90,138])for(const ahead of [8,3]){await evaluate(`previewCollapse(${at},${ahead},${at===138})`);await capture(`presentation-collapse-${at}-${ahead}`);}
   }else if(process.argv.includes('--route-only')){
     await call('Page.navigate',{url:'http://127.0.0.1:3996/route-review'});await wait("typeof previewRoute==='function'");
     for(const at of [30,65,110,165]){await evaluate('previewRoute('+at+')');await capture('presentation-route-'+at);}
+  }else if(process.argv.includes('--hand-contact-only')){
+    await evaluate("document.getElementById('player-name').value='Mara';document.getElementById('practice-start').click()");await wait("document.getElementById('mission-chapter').textContent.includes('SIMULATOR')");
+    const room=[...api.rooms.values()][0],game=room.game,host=room.matchPlayers[0];
+    for(let i=0;i<120&&room.phase!=='playing';i++)await sleep(50);if(room.phase!=='playing')throw Error('Practice has not started');
+    game.practice=null;game.calibrations.power.solved=true;game.nextBreachAt=game.lockdown.nextAt=game.complication.at=1e9;game.threats.skitterAt=game.threats.electricAt=game.threats.wardenAt=1e9;
+    Object.assign(host,{x:8.7,z:-6,rotation:-Math.PI/2});io.to(host.socketId).emit('player:correct',{x:host.x,z:host.z,rotation:host.rotation,teleport:true});io.to(room.code).emit('game:state',snapshotGame(game,room.matchPlayers,Date.now()));
+    await wait("document.getElementById('interaction').textContent.includes('REPAIR POWER CORE')");
+    await evaluate("document.activeElement?.blur();const canvas=document.querySelector('#game canvas');Object.defineProperty(document,'pointerLockElement',{configurable:true,get:()=>canvas});document.dispatchEvent(new MouseEvent('mousemove',{movementY:200}));document.dispatchEvent(new KeyboardEvent('keydown',{code:'KeyE',bubbles:true}))");
+    for(let i=0;i<80&&!game.holds.has(host.id);i++)await sleep(50);if(!game.holds.has(host.id))throw Error('No panel contact hold');game.holds.get(host.id).need=120;
+    room.phase='visual-fixture';io.to(room.code).emit('game:state',snapshotGame(game,room.matchPlayers,Date.now()));
+    for(const [width,height] of [[1280,720],[520,640]]){await call('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:1,mobile:false});await capture('presentation-contact-hands-panel-'+width);}
+    room.phase='playing';await evaluate("document.dispatchEvent(new KeyboardEvent('keyup',{code:'KeyE',bubbles:true}));document.dispatchEvent(new MouseEvent('mousemove',{movementY:340}))");await sleep(300);
+    const breach={id:'breach:contact-review',x:6,z:-6,room:'engineering'};game.breaches.push(breach);Object.assign(host,{x:6,z:-5.55,rotation:0});io.to(host.socketId).emit('player:correct',{x:host.x,z:host.z,rotation:0,teleport:true});io.to(room.code).emit('game:state',snapshotGame(game,room.matchPlayers,Date.now()));await wait("document.getElementById('interaction').textContent.includes('PATCH')");
+    await evaluate("document.dispatchEvent(new KeyboardEvent('keydown',{code:'KeyE',bubbles:true}))");
+    for(let i=0;i<80&&!game.holds.has(host.id);i++)await sleep(50);if(!game.holds.has(host.id))throw Error('No floor hold '+JSON.stringify({p:[host.x,host.z,host.hp,host.downed],ui:await evaluate("({interaction:document.getElementById('interaction').textContent,toast:document.getElementById('toast').textContent,working:document.body.classList.contains('working'),focus:document.activeElement?.id})")}));game.holds.get(host.id).need=120;
+    await evaluate("document.dispatchEvent(new KeyboardEvent('keydown',{code:'Digit4',bubbles:true}));document.dispatchEvent(new KeyboardEvent('keyup',{code:'Digit4',bubbles:true}))");
+    for(let i=0;i<80&&game.holds.get(host.id)?.gearApplied!=='welder';i++)await sleep(50);if(game.holds.get(host.id)?.gearApplied!=='welder')throw Error('No floor welder');game.holds.get(host.id).need=120;
+    room.phase='visual-fixture';io.to(room.code).emit('game:state',snapshotGame(game,room.matchPlayers,Date.now()));
+    await wait("document.body.classList.contains('working')");
+    for(const [width,height] of [[1280,720],[520,640]]){await call('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:1,mobile:false});await capture('presentation-contact-hands-welder-'+width);}
+    room.phase='playing';await key('KeyE','keyUp');await sleep(200);if(game.holds.has(host.id))throw Error('Hand contact release did not cancel');checks++;
   }else if(process.argv.includes('--hands-only')){
     await evaluate("document.getElementById('player-name').value='Mara';document.getElementById('practice-start').click()");
     await wait("document.getElementById('mission-chapter').textContent.includes('SIMULATOR')");

@@ -3,6 +3,7 @@ import { createModelLibrary } from "./models.js";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import { createHorrorLeviathan } from "./leviathan-horror.js";
 import { FINALE_POINTS } from "../../shared/tactical.js";
+import {CIRCUITS} from '../../shared/fieldwork.js';
 import { createSurfaces, addStationStructure } from "./surfaces.js";
 import { options, QUALITY } from "./options.js";
 import { initialLeviathanYaw, leviathanYaw, leviathanClearance, turnLeviathan } from "./leviathan-motion.js";
@@ -160,7 +161,7 @@ export function buildWorld(scene) {
   scene.add(podDoor);
 
   // ================================================================ stations
-  const stations = new Map();
+  const stations = new Map(),workPanels=new Map();
   function addLabel(group, text, y, id) {
     const junction=STATIONS[id]?.junction,small=STATIONS[id]?.kind==='door';
     const width=small?.62:.88,height=width/8;
@@ -210,6 +211,7 @@ export function buildWorld(scene) {
     group.rotation.y = def.rot;
     scene.add(group);
     stations.set(id, { def, group, screenMat, beaconMat, beacon });
+    workPanels.set(id,{def,group});
   }
   for (const [id, def] of Object.entries(FINALE_POINTS)) {
     const group = new THREE.Group(); group.position.set(def.x, 0, def.z); group.rotation.y = def.rot;
@@ -224,6 +226,7 @@ export function buildWorld(scene) {
       screen.scale.set(0.45,0.25,1); screen.position.z=0.5;
     }
     emergencyLooks[id] = material;
+    workPanels.set(id,{def,group});
   }
   const targetMarker = new THREE.Mesh(new THREE.RingGeometry(0.22, 0.27, 28), new THREE.MeshBasicMaterial({ color: 0xb8eaf0, transparent: true, opacity: 0.8, side: THREE.DoubleSide, depthWrite: false }));
   targetMarker.rotation.x = -Math.PI / 2; targetMarker.visible = false; scene.add(targetMarker);
@@ -400,7 +403,7 @@ export function buildWorld(scene) {
     subView.update(state.sub,ctx.dt,ctx.selfId);
     threatView.update(state,ctx.viewer);
     storyView.update(state.story);
-    resourceView.update([...(state.resources||[]),...(state.scrap||[]),...(state.stage==='main'&&state.salvage?.state==='available'?[{...SALVAGE,item:'regulator',id:SALVAGE.recover}]:[])]);
+    resourceView.update([...(state.resources||[]),...(state.scrap||[]),...(state.stage==='main'?state.drops||[]:[]),...(state.stage==='main'&&state.salvage?.state==='available'?[{...SALVAGE,item:'regulator',id:SALVAGE.recover}]:[])]);
     lockerView.update(state);
     equipment.update(state.effects, options.quality, ctx.viewer);
     const { dt, time, now, reducedEffects, holdIds, alert } = ctx;
@@ -486,5 +489,21 @@ export function buildWorld(scene) {
     models.dispose();
   }
 
-  return { update, dispose, setTarget };
+  const workRay=new THREE.Raycaster();
+  function workSurface(target,origin){
+    if(!target)return null;
+    if(target.kind==='resource'||target.kind==='gearPickup'||target.id===SALVAGE.recover)return resourceView.contact(target.id,origin);
+    if(target.kind==='breach')return {point:new THREE.Vector3(target.b.x,.05,target.b.z),normal:new THREE.Vector3(0,1,0)};
+    if(target.kind==='circuit'){const p=CIRCUITS[target.point.room];return p?{point:new THREE.Vector3(p.x,.1,p.z),normal:new THREE.Vector3(0,1,0)}:null;}
+    const station=workPanels.get(target.id==='service:pump'||target.id===SALVAGE.install?'pump':target.id);if(!station)return null;
+    const group=station.group;group.updateWorldMatrix(true,true);
+    const centre=group.localToWorld(new THREE.Vector3(0,station.def.junction?1.1:1.2,.19)),meshes=[];
+    group.traverseVisible(o=>{if(o.isMesh)meshes.push(o);});
+    workRay.set(origin,centre.sub(origin).normalize());
+    const hit=workRay.intersectObjects(meshes,false)[0];if(!hit)return null;
+    const normal=hit.face.normal.clone().applyNormalMatrix(new THREE.Matrix3().getNormalMatrix(hit.object.matrixWorld));
+    if(normal.dot(origin.clone().sub(hit.point))<0)normal.negate();
+    return {point:hit.point,normal};
+  }
+  return { update, dispose, setTarget,workSurface };
 }

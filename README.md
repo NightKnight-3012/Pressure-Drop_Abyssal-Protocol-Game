@@ -48,6 +48,20 @@ npm start          # serves the game AND the website on http://localhost:3000
 
 ## The game
 
+### Passing equipment
+
+Press **Q** to select a carried slot, then **Backspace** to put that item down. A teammate with an empty slot can approach it and **hold the interaction key for one second** to recover it. In the wrist computer, clicking a hotbar slot selects it without spending it; the **Put down** button works with mouse or keyboard focus. Outside the wrist screen, hotbar buttons retain their normal use action.
+
+Transfers preserve the single charge and department restrictions. Alloy can be passed; the pump regulator stays secured as mission cargo. Drops are available only before launch, inside or at the marked exterior survey level, and remain until recovered or the match resets. Loose gear is capped at four items per starting crew member; reaching that cap refuses a new drop without consuming it. No added supplies, credits or required exploration. Gear is placed at the server-validated player position, with a short drop cooldown and exclusive, cancellable recovery. There is no throwing, physics drift or automatic recovery from a lost player's carried inventory.
+
+Run `npm run test:gear-sharing` for pure-rule and four-diver network checks. `npm run test:client` exercises actual put-down/recovery controls; after building, `node test/review-current-ui.mjs --gear-only` captures the recovery and wrist screens at 1280×720 and 520×640.
+
+### Authored escape collapses
+
+The three existing falling obstacles now appear as a broken lift gantry, torn wreck bulkhead and sheared survey conduit. Their fall follows authoritative route progress, so reconnects and reduced effects preserve the same hazard. A one-time server warning and caption identify the blocked lane about three seconds ahead even at maximum boost; the continuous HUD warning also survives reconnects. The two other lanes remain clear. Damage, obstacle count, route length and steering are unchanged; these are authored replacements for existing hazards, not added difficulty. Reduced effects removes decorative roll while retaining the necessary fall.
+
+Run `npm run test:collapse` for telegraph/damage checks at every crew size and finite geometry/lane-envelope checks. For isolated scenery captures: `node test/build-route-preview.mjs`, then `node test/review-current-ui.mjs --collapse-only`. These renders do not measure hardware FPS or replace full cockpit playtesting.
+
 ### A match, step by step
 
 1. **Lobby**: everyone picks a department and readies up. The host starts the mission. (Unchosen departments are
@@ -395,7 +409,9 @@ Node 24.20+ is required for the built-in SQLite API ([official documentation](ht
 
 Holding the interaction key now raises industrial diving gloves and suit sleeves for real server-confirmed work. Repairs show a wrench; applying Engineering's welder switches to a visible torch after the server accepts it. Valve/filter work, treatment, switches and supply recovery use simple poses without a tool. Hands disappear immediately when you release interaction, and are hidden during pause menus, calibration puzzles, spectator views and vehicle seats. They never lock the camera or extend a hold. Reduced effects keeps the wrists steady and the welding tip constant, with no flashing light.
 
-The original procedural view model uses an isolated, depth-cleared first-person pass, so walls cannot slice through the arms. It adds no world lights or shadows and skips the pass completely when idle. Compact windows lift the gloves above the lower instruments. This first version uses camera-relative poses, not inverse-kinematic contact with each panel, individual finger animation, or idle weapon arms. Existing repair/welder cues and captions remain in use. Run npm run test:hands and npm run test:hands:visual for the focused checks and screenshots.
+The original procedural view model uses an isolated, depth-cleared first-person pass. It adds no world lights or shadows and skips the pass completely when idle. Both gloves now have four independently animated three-joint fingers and a two-joint thumb. Two fixed-length arm segments solve elbow placement against reachable equipment: the supporting fingertips and wrench jaw, welding tip or pointing fingertip each use their own contact anchor. Station, emergency-panel and supply contact comes from the rendered mesh surface; breach/circuit contact uses the visible floor face. A lower arm working stance handles nearby floor repairs without moving the camera or changing player collision, breathing or repair rules.
+
+Contact rendering matches the world camera's FOV, yaw, pitch and roll, including narrow windows. If a target lies beyond arm reach, work still succeeds under the existing server rules using the free work pose; the arms do not stretch to fake contact. Treatment and unsupported interaction props retain their animated gestures rather than body/prop collision IK. Reduced effects keeps the necessary contact pose but freezes finger/wrist cycling and entry motion. The rig stays within ten mesh draws, with all finger segments and sleeves in two instanced draws. There are no idle weapon arms. Existing repair/welder cues and captions remain in use. Run `npm run test:hands` and, after building, `node test/review-current-ui.mjs --hand-contact-only` for contact checks and screenshots; `npm run test:hands:visual` checks the free work poses.
 
 Keyboard accessibility: the focused SKIFF-2 DOCK button accepts held Enter or Space. Releasing the key or moving focus cancels the docking request. Reconnect restores the ordinary connection-warning text after a server notice.
 
@@ -409,7 +425,7 @@ Escape corridor refinement: paired reflective dashes follow the shared route ben
 
 Audio mix refinement: non-positional suit warnings, radio-chat cues and sonar readouts use a clear communications path controlled by Effects volume; positional creature and machinery sounds keep underwater filtering. Important warnings ease propulsion and water-rush levels back temporarily, alongside ambience, then recover automatically. Overlapping warning windows cannot shorten each other. Initial audio unlock now respects the current EVA/underwater environment. Captions, master mute, hidden-tab muting and existing volume controls remain available. This changes mixing of the local authored bank, without adding spoken voice lines or external audio.
 
-Work alignment: visible gloves make a small, bounded adjustment toward the current interaction target. Looking away from that target or opening the wrist computer hides the work pose. This is presentation only; server holds still determine progress and completion. These remain camera-relative poses, without per-panel contact IK.
+Work alignment: reachable equipment uses surface contact and two-bone arm IK; distant work retains bounded camera-relative poses. Looking away from the target or opening the wrist computer hides the hands. This is presentation only; server holds still determine progress and completion.
 
 Control guidance now follows saved key bindings in the suit HUD, pause and briefing hints, current objectives and survey-sub help. Swapped keys are substituted once, and reset restores original labels while preserving hint formatting. World-mounted signs may still show default controls.
 

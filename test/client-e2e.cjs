@@ -21,7 +21,7 @@ const until = async (fn, ms = 6000) => { const t = Date.now(); while (Date.now()
   const { build } = await import("vite");
   const output = await build({
     plugins: [{ name: "count-visible-view-work", transform(code, id) {
-      if(id.replaceAll("\\", "/").endsWith("/client/src/work-hands.js"))return code.replace("if(disposed)return;pose=next;", "if(disposed)return;globalThis.__workPose=next?.kind||null;pose=next;").replace("try{renderer.clearDepth();", "try{globalThis.__workRenders=(globalThis.__workRenders||0)+1;renderer.clearDepth();");
+      if(id.replaceAll("\\", "/").endsWith("/client/src/work-hands.js"))return code.replace("if(disposed)return;pose=next;", "if(disposed)return;globalThis.__workPose=next?.kind||null;pose=next;").replace("try{renderer.clearDepth();", "try{globalThis.__workRenders=(globalThis.__workRenders||0)+1;renderer.clearDepth();").replaceAll('view.contactActive=false;','view.contactActive=false;globalThis.__workContact=false;').replace('view.contactActive=true;','view.contactActive=true;globalThis.__workContact=true;');
       if (id.replaceAll("\\", "/").endsWith("/client/src/world.js")) return code.replace("function update(state, ctx) {", "function update(state, ctx) { globalThis.__stationUpdates = (globalThis.__stationUpdates || 0) + 1;");
       if (id.replaceAll("\\", "/").endsWith("/client/src/pod-view.js")) return code.replace("update(finale, dt, rear = false, reduced = false, audible = true) {", "update(finale, dt, rear = false, reduced = false, audible = true) { globalThis.__podUpdates = (globalThis.__podUpdates || 0) + 1;");
     } }],
@@ -122,6 +122,20 @@ const until = async (fn, ms = 6000) => { const t = Date.now(); while (Date.now()
   ok('Q cycles through the fourth role slot', $('gear-slots').children[3].getAttribute('aria-pressed') === 'true');
   await tap('KeyQ');
   ok('Q wraps back to the first shared slot', $('gear-slots').children[0].getAttribute('aria-pressed') === 'true');
+  await tap('Backspace');
+  ok('put-down shortcut creates one authoritative loose item',await until(()=>game.drops.length===1&&P[0].inventory[0]===null));
+  ok('loose equipment has a named recovery prompt',await until(()=>/TAKE FLARE/.test(txt('interaction'))));
+  key('keydown','KeyE');
+  ok('real client recovers its dropped charge through a timed hold',await until(()=>game.drops.length===0&&P[0].inventory[0]==='flare',3500));
+  key('keyup','KeyE');
+  await tap('Tab');
+  ok('wrist computer offers an accessible selected-item drop button',vis('gear-drop')&&!$('gear-drop').disabled&&/FLARE/.test(txt('gear-drop')));
+  $('gear-slots').children[1].click();
+  ok('mouse selection in wrist mode does not spend the chosen tool',await until(()=>/ACOUSTIC LURE/.test(txt('gear-drop')))&&P[0].inventory[1]==='decoy');
+  $('gear-slots').children[0].click();
+  $('gear-slots').children[0].focus();
+  await tap('Tab');
+  ok('closing wrist releases equipment-button focus back to movement',!w.document.activeElement?.closest?.('#gear'));
   await tap('Digit1');
   ok('equipment shortcut consumes a server-owned flare', await until(() => P[0].inventory[0] === null && game.effects.length === 1));
   ok('spent tool is disabled in the hotbar', await until(() => $('gear-slots').children[0].disabled && /Spent/.test($('gear-slots').children[0].textContent)));
@@ -147,7 +161,9 @@ const until = async (fn, ms = 6000) => { const t = Date.now(); while (Date.now()
   ok("matching circuit controls calibrates the real server system", game.calibrations.power.solved);
   $("repair-close").click(); await sleep(100);
   ok("calibrated panel returns to timed repair", !vis("repair-panel") && /REPAIR POWER CORE/.test(txt("interaction")));
+  tp(0,8.7,-6,STATIONS.power);await sleep(200);
   key("keydown", "KeyE"); await sleep(1500);
+  ok('reachable equipment uses real surface contact and arm IK',await until(()=>w.__workContact===true,1000));
   ok("holding E shows server-confirmed progress", /POWER CORE/.test(txt("interaction")) && !$("repair-wrap").classList.contains("hidden"), txt("interaction"));
   const w1 = parseFloat($("repair-fill").style.width); await sleep(1000); const w2 = parseFloat($("repair-fill").style.width);
   ok("repair bar advances", w2 > w1, `${w1} -> ${w2}`);

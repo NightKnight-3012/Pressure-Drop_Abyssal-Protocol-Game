@@ -8,7 +8,7 @@ import {
 } from "../shared/layout.js";
 import {
   createGame, tickGame, snapshotGame, startHold, cancelHold, remoteDoor, launchDecoy, castVote,
-  assignDepartments, closedRooms, isActive, repairInput, useItem, takeLockerItem,craftItem,remoteCircuit,subControl,subAction,diverControl
+  assignDepartments, closedRooms, isActive, repairInput, useItem, dropItem, takeLockerItem,craftItem,remoteCircuit,subControl,subAction,diverControl
 } from "./game.js";
 import { podControl, podAction } from "./finale.js";
 import { MISSIONS } from "../shared/tactical.js";
@@ -460,6 +460,10 @@ export function attachGame(io, { timeScale = 1, log = console,repository=null,li
       if (!c || !isObject(data) || !allow(c.p, 'item', 250, Date.now())) return;
       const err = useItem(c.room.game, c.room.matchPlayers, c.p, data.slot);
       if (err) fail(socket, err);
+    });
+    socket.on('item:drop',data=>{
+      const c=inMatch();if(!c||!isObject(data)||!allow(c.p,'drop',250,Date.now()))return;
+      const err=dropItem(c.room.game,c.room.matchPlayers,c.p,data.slot);if(err)fail(socket,err);
     });
     socket.on('locker:take', data => {
       const c=inMatch();if(!c||!isObject(data)||!allow(c.p,'locker',250,Date.now()))return;

@@ -6,7 +6,7 @@ import { FINALE_POINTS, MISSIONS, CAPSULE_STEPS, POD_ROUTE_LENGTH } from "../../
 import { net } from "./network.js";
 import { POD_VISUAL_SCALE } from "./pod-motion.js";
 import { POD_DOCKING } from "../../shared/tactical.js";
-import { routeChapter } from '../../shared/escape-route.js';
+import { routeChapter,collapseLabel,approachingCollapse } from '../../shared/escape-route.js';
 import { missionChapter, roleBriefing } from "./presentation.js";
 import { ITEMS, ITEM_LIMIT } from '../../shared/items.js';
 import { bearingTo } from './gear-guidance.js';
@@ -133,15 +133,20 @@ export function createHud() {
   const voteSel = new Set();
   let voteSent = false, repairId = null, repairSend = null, repairKey = "";
   let gearSelection = 0, gearState = '';
+  $('gear-drop').onclick=()=>net.drop(gearSelection);
   $('gear-slots').replaceChildren();
   const gearButtons = Array.from({ length: ITEM_LIMIT }, (_, slot) => {
     const button = document.createElement('button');
-    button.className = 'secondary gear-slot'; button.onclick = () => net.item(slot);
+    button.className = 'secondary gear-slot'; button.onclick = () => {
+      if(document.body.classList.contains('wrist-open')){gearSelection=slot;gearState='';}
+      else net.item(slot);
+    };
     $('gear-slots').appendChild(button); return button;
   });
   const toggleWrist = force => {
     const open = force ?? !document.body.classList.contains("wrist-open");
     document.body.classList.toggle("wrist-open", open); $("wrist-toggle").setAttribute("aria-expanded", String(open));
+    if(!open&&document.activeElement?.closest?.('#gear'))document.activeElement.blur();
   };
   $("wrist-toggle").onclick = () => toggleWrist();
   const wristView = crew => {
@@ -171,6 +176,7 @@ export function createHud() {
   return {
     el, caption,
     useGear(slot = gearSelection) { net.item(slot); },
+    dropGear() { net.drop(gearSelection); },
     cycleGear() { gearSelection = (gearSelection + 1) % ITEM_LIMIT; gearState = ''; },
     dispose() { unbindHints();clearTimeout(toastTimer); el.captions.replaceChildren(); },
     toggleWrist,
@@ -230,8 +236,8 @@ export function createHud() {
       const warning = secured ? "SHUTTER SEALED / ARMORED LIFT ENGAGED / STATION CREW STILL ON RADIO" : clamped ? "CLAMPS LOCKED / SHUTTER CLOSING / HULL STILL EXPOSED" : pod.phase === "approach" ? "RECOVERY SHAFT AHEAD / BOOST DISABLED / PREPARE TO ALIGN" : pod.phase === "rendezvous" ? "CRADLE: CENTER WITH A/D + HOLD S FOR 3 SECONDS / RELEASE BOOST" : pod.sonar && next ? `SONAR: WRECKAGE ${lane} · ${Math.round((next.at - pod.progress)*POD_VISUAL_SCALE)}m · CONTACT ${Math.round(pod.creatureDistance)}m ASTERN` : f.creature.target === "pod" ? pod.creatureDistance < 12 ? (pod.charges ? "CONTACT ATTACKING ASTERN / X DECOY / E REPAIR / KEEP STEERING" : "CONTACT ATTACKING ASTERN / DECOYS EMPTY / E REPAIR / KEEP STEERING") : "CONTACT FOLLOWING THE POD · WATCH THE WRECKAGE" : "CONTACT MOVING TOWARD THE STATION · THEIR WINDOW IS CLOSING";
       $("pod-decoy").disabled = secured || observing || !pod.counterReady || !pod.charges;
       if(pod.phase==='run') {
-        const falling=next?.kind==='falling' && next.at-pod.progress<13;
-        const notice=falling?`FALLING SECTION ${lane} / MOVE TO A CLEAR LANE`:routeChapter(pod.progress);
+        const falling=approachingCollapse(pod.route,pod.progress);
+        const notice=falling?`${collapseLabel(falling.at)} COLLAPSING ${['LEFT','CENTRE','RIGHT'][falling.lane+1]} / MOVE TO A CLEAR LANE`:routeChapter(pod.progress);
         setText($("pod-warning"),`${notice} / ${warning}`);
       } else setText($("pod-warning"),warning);
       setText($("pod-decoy"), pod.charges ? `X / DECOY (${pod.charges})` : "X / DECOYS EMPTY");
@@ -274,20 +280,23 @@ export function createHud() {
     update(state, ctx) {
       const { me, zone, depth, stamina, winded } = ctx;
       const gearHidden = !me || me.down || me.lost || me.escaped || me.aboard || !!me.subSeat || state.stage === 'finale';
+      const choosingGear=document.body.classList.contains('wrist-open');
       setClass($('gear'), 'hidden', gearHidden);
-      const gearKey = JSON.stringify([me?.inventory, me?.itemReadyIn, state.lureReadyIn, state.scanReadyIn, gearSelection]);
+      const gearKey = JSON.stringify([me?.inventory, me?.itemReadyIn, state.lureReadyIn, state.scanReadyIn, gearSelection,gearHidden,state.stage,choosingGear]);
       if (gearKey !== gearState) {
         gearState = gearKey;
         gearButtons.forEach((b, i) => {
           const id = me?.inventory?.[i], def = ITEMS[id];
           const cooldown = Math.max(me?.itemReadyIn || 0, id === 'decoy' ? state.lureReadyIn || 0 : id === 'scanner' ? state.scanReadyIn || 0 : 0);
           b.textContent = `${i + 1} ${def ? def.symbol + ' ' + def.label + (cooldown ? ` / ${cooldown}s` : ' ×1') : 'Spent'}`;
-          b.title = def?.help || 'Used this match'; b.disabled = !def || cooldown > 0;
-          b.setAttribute('aria-label', `${i + 1}: ${def?.label || 'Spent'}. ${def?.help || ''}${cooldown ? ` Ready in ${cooldown}s.` : ''}`);
+          b.title = choosingGear?'Select this slot to put it down':def?.help || 'Used this match'; b.disabled = !def || !choosingGear&&cooldown > 0;
+          b.setAttribute('aria-label', `${choosingGear?'Select slot ':''}${i + 1}: ${def?.label || 'Spent'}. ${def?.help || ''}${cooldown ? ` Ready in ${cooldown}s.` : ''}`);
           b.setAttribute('aria-pressed', String(i === gearSelection));
         });
         const def = ITEMS[me?.inventory?.[gearSelection]];
-        setText($('gear-hint'), me?.itemReadyIn ? `EQUIPMENT COOLDOWN ${me.itemReadyIn}s` : `Q select · X use · ${def?.help || 'Selected slot spent'}`);
+        setText($('gear-hint'), `${choosingGear?'Click a slot or Q to select':'Q select · X use'} · Backspace put down · ${me?.itemReadyIn ? `COOLDOWN ${me.itemReadyIn}s` : def?.help || 'Selected slot empty'}`);
+        $('gear-drop').disabled=gearHidden||state.stage!=='main'||!def||me.inventory[gearSelection]==='regulator';
+        $('gear-drop').textContent=`PUT DOWN ${def?.label.toUpperCase()||'SELECTED SLOT'} / BACKSPACE`;
       }
       const guidance = [];
       const viewer = ctx.position || me || {x:0,z:0};

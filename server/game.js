@@ -114,7 +114,7 @@ export function resetPlayerForMatch(p, slot) {
     tasksDone: 0, contribution: 0, credits: {}, escaped: false, ending: null, volunteered: false,
     podRepairAt: 0, suit: TUNING.suitSeconds, stamina: STAMINA.max, winded: false,
     inventory: startingInventory(p.dept), itemReadyAt: 0, lockerReadyAt:0,craftReadyAt:0,flashlight:true,subSeat:null,depth:0,vertical:0,verticalUntil:0,
-    grabExposure:0,stats:{downs:0,revives:0},lostAt:null,escapedAt:null
+    dropReadyAt:0,grabExposure:0,stats:{downs:0,revives:0},lostAt:null,escapedAt:null
   });
 }
 
@@ -132,7 +132,7 @@ export function createGame({ players, now = Date.now(), seed = (Math.random() * 
     breaches: [], breachSeq: 0, nextBreachAt: TUNING.firstBreachAt,
     holds: new Map(), effects: [], effectSeq: 0, lureReadyAt: 0, timeline: [],
     scan: null, scanReadyAt: 0, scanPulse: null, returnMarker: null,
-    lockers: lockerStock(scale),
+    lockers: lockerStock(scale), drops:[], dropSeq:0,
     resources: createResources(scale,mulberry32(seed ^ 0x53414c56)),
     salvage: { state:'available', carrier:null },
     story: { available:storySelection(mulberry32(seed^0x4c4f4753)), found:[] },
@@ -166,7 +166,7 @@ export function takeLockerItem(game, players, p, lockerId, item) {
   if (game.time < p.lockerReadyAt) return 'Wait for the locker dispenser.';
   if (stock[item]<=0) return 'That shared supply is exhausted.';
   const slot=Array.from({length:ITEM_LIMIT},(_,i)=>i).find(i=>p.inventory[i]===null);
-  if (slot===undefined) return 'Inventory full. Spend a tool before taking another.';
+  if (slot===undefined) return 'Inventory full. Use or put down equipment before taking another.';
   stock[item]--; p.inventory[slot]=item; p.lockerReadyAt=game.time+TUNING.items.lockerCooldown;
   (game.pendingEvents??=[]).push({type:'lockerTake',by:p.id,locker:lockerId,item,slot,x:point.x,z:point.z});
   return null;
@@ -190,6 +190,23 @@ export function remoteCircuit(game,players,p,room){
   if(game.time<game.circuitReadyAt)return 'Wait for the circuit switch to reset.';
   game.roomCircuits[room]=!game.roomCircuits[room];game.circuitReadyAt=game.time+2;
   (game.pendingEvents??=[]).push({type:'circuit',room,on:game.roomCircuits[room],by:p.id});return null;
+}
+// Put gear at the player's validated position: never accept a client item or destination.
+export function dropItem(game, players, p, slot) {
+  if(game.status!=='playing'||game.stage!=='main'||!isActive(p)||p.subSeat||p.exterior&&p.depth>1.25)return 'Put equipment down on foot or at the marked survey level before launch.';
+  if(!Number.isInteger(slot)||slot<0||slot>=ITEM_LIMIT)return 'Invalid equipment slot.';
+  const item=p.inventory[slot];
+  if(!item||!Object.hasOwn(ITEMS,item))return 'That equipment slot is empty.';
+  if(item==='regulator')return 'Mission cargo stays secured. Install the regulator at the Engineering pump.';
+  if(game.time<p.dropReadyAt)return 'Wait before putting down another item.';
+  if(game.drops.length>=game.startCount*TUNING.items.dropsPerCrew)return 'Too much loose equipment. Recover a dropped supply first.';
+  const drop={id:`drop:${++game.dropSeq}`,item,x:p.x,z:p.z,ext:p.exterior,room:p.exterior?null:roomAt(p.x,p.z)};
+  game.drops.push(drop);p.inventory[slot]=null;p.dropReadyAt=game.time+TUNING.items.dropCooldown;
+  game.holds.delete(p.id);
+  (game.pendingEvents??=[]).push({type:'gearDropped',by:p.id,...drop});return null;
+}
+function droppedGearValid(game,p,r){
+  return game.stage==='main'&&!!r&&p.exterior===r.ext&&(!p.exterior?roomAt(p.x,p.z)===r.room:p.depth<=1.25)&&dist(p,r)<=RESOURCE_RANGE&&p.inventory.includes(null);
 }
 export function useItem(game, players, p, slot) {
   if (game.status !== 'playing' || !isActive(p) || game.stage === 'finale') return 'Equipment is unavailable right now.';
@@ -337,6 +354,12 @@ export function startHold(game, players, player, id) {
   }
   if(player.subSeat)return 'Exit or dock the survey sub before using station equipment.';
   if(player.exterior&&player.depth>1.25)return 'Ascend to the marked survey level before working on equipment or entering the airlock.';
+  if(id.startsWith('drop:')){
+    const drop=game.drops.find(r=>r.id===id);
+    if(!droppedGearValid(game,player,drop))return 'Approach the dropped equipment with an empty slot in the same room or outside.';
+    if([...game.holds].some(([pid,h])=>pid!==player.id&&h.id===id))return 'Another crew member is recovering that equipment.';
+    game.holds.set(player.id,{id,mode:'gearPickup',since:game.time,need:TUNING.items.pickupSeconds});return null;
+  }
   if(id==='sub:repair'){
     if(!subRepairValid(game,player))return 'Approach a stationary damaged sub with one repair kit or alloy slot.';
     if([...game.holds.values()].some(h=>h.id===id))return 'Someone is already repairing the survey sub.';
@@ -368,7 +391,7 @@ export function startHold(game, players, player, id) {
   if(id.startsWith('resource:')) {
     const resource=game.resources.find(r=>r.id===id);
     if(game.stage!=='main'||!player.exterior||!resource||dist(player,resource)>RESOURCE_RANGE)return 'Swim to an available supply canister before launch.';
-    if(!player.inventory.some(item=>item===null))return 'Inventory full. Use a tool to make room before recovering supplies.';
+    if(!player.inventory.some(item=>item===null))return 'Inventory full. Use or put down equipment to make room.';
     if([...game.holds].some(([pid,h])=>h.id===id&&pid!==player.id))return 'Another diver is opening that supply canister.';
     game.holds.set(player.id,{id,mode:'resource',since:game.time,need:TUNING.resources.hold});return null;
   }
@@ -507,6 +530,10 @@ export function launchDecoy(game, players, player, events) {
 function completeHold(game, players, player, hold, events) {
   const { id, mode } = hold;
   game.holds.delete(player.id);
+  if(mode==='gearPickup'){
+    const r=game.drops.find(r=>r.id===id),slot=player.inventory.indexOf(null);
+    if(r&&slot>=0){player.inventory[slot]=r.item;game.drops=game.drops.filter(d=>d.id!==id);events.push({type:'gearRecovered',by:player.id,...r,slot});}return;
+  }
   if(mode==='subDock'){dockSub(game,players,events);return;}
   if(mode==='subRepair'){const slot=player.inventory.findIndex(i=>i==='repair'||i==='scrap');if(slot>=0){player.inventory[slot]=null;game.sub.hull=Math.min(SUB_TUNING.hull,game.sub.hull+SUB_TUNING.repairAmount);events.push({type:'subRepaired',by:player.id});}return;}
   if(mode==='scrap'){const r=game.scrap.find(r=>r.id===id),slot=player.inventory.indexOf(null);if(r&&slot>=0){player.inventory[slot]='scrap';game.scrap=game.scrap.filter(r=>r.id!==id);events.push({type:'scrapRecovered',by:player.id,x:r.x,z:r.z,slot});}return;}
@@ -628,6 +655,7 @@ export function tickGame(game, players, nowMs = Date.now(), timeScale = 1) {
       if(hold.mode==='subDock')valid=canDockSub(game,p);
       else if(hold.mode==='subRepair')valid=subRepairValid(game,p);
       else if(p.subSeat)valid=false;
+      else if(hold.mode==='gearPickup')valid=droppedGearValid(game,p,game.drops.find(r=>r.id===hold.id));
       else if(hold.mode==='scrap'){const r=game.scrap.find(r=>r.id===hold.id);valid=game.stage==='main'&&p.exterior&&!!r&&dist(p,r)<=RESOURCE_RANGE&&p.inventory.includes(null);}
       else if(hold.mode==='circuit'){const point=CIRCUITS[hold.id.slice(8)];valid=game.stage==='main'&&!p.exterior&&!!point&&dist(p,point)<=REPAIR_RANGE&&game.time>=game.circuitReadyAt;}
       else if(hold.mode==='log'){const log=LOGS.find(l=>l.id===hold.id.slice(4));valid=game.stage==='main'&&!!log&&game.story.available.includes(log.id)&&!game.story.found.includes(log.id)&&p.exterior===log.ext&&dist(p,log)<=LOG_RANGE;}
@@ -989,6 +1017,7 @@ export function snapshotGame(game, players, nowMs = Date.now()) {
     breaches: game.breaches.map((b) => ({ id: b.id, room: b.room, x: b.x, z: b.z,severity:round(breachSeverity(b,game.time),2),clampedIn:Math.max(0,Math.ceil((b.clampedUntil||0)-game.time)) })),
     stations, holds, complication: { state: game.complication.state },
     lockers: Object.fromEntries(Object.entries(game.lockers).map(([id,stock])=>[id,{...stock}])),
+    drops:game.drops.map(r=>({...r})),
     resources: game.resources.map(r=>({...r})),
     salvage: {...game.salvage},
     story: {available:[...game.story.available],found:[...game.story.found]},

@@ -10,3 +10,5 @@ export function routeChapter(progress) {
 export function createRoute(rng) {
   return Array.from({length:14},(_,i)=>({at:18+i*12,lane:[-1,0,1][Math.floor(rng()*3)],kind:i%4===2?'falling':'wreck',passed:false}));
 }
+export function collapseLabel(at){return at<70?'LIFT GANTRY':at<115?'WRECK BULKHEAD':'SURVEY CONDUIT';}
+export function approachingCollapse(route,progress){return route.find(g=>g.kind==='falling'&&!g.passed&&g.at>=progress&&g.at-progress<=13)||null;}

@@ -184,6 +184,7 @@ export const sfx={
   subEngine:position=>cue('podBoost','[SURVEY SUB THRUSTERS / ENGINE NOISE CARRIES THROUGH WATER]',position),
   hazardImpact:(text,position)=>cue('impact',text,position),
   recover:position=>cue('holdStart','[SEALED SUPPLY CANISTER OPENED / EQUIPMENT RECOVERED]',position),
+  gearTransfer:(recovered,position)=>cue('holdStart',recovered?'[EQUIPMENT RECOVERED]':'[EQUIPMENT SET DOWN]',position),
   supply:position=>cue('holdStart','[SUPPLY DRAWER / SHARED EQUIPMENT TAKEN]',position),
   listening:position=>cue('hullGroan',`[SLOW SCRAPING${direction(position).toUpperCase()} / STAY QUIET]`,position),
   equipment:(item,position)=>{
@@ -196,6 +197,7 @@ export const sfx={
   flashlight:()=>cue("flashlight"),holdStart:()=>cue("holdStart"),holdCancel:()=>cue("holdCancel"),done:()=>cue("done"),
   impact:position=>cue("impact",`[THE LEVIATHAN SLAMS INTO THE HULL${direction(position).toUpperCase()}]`,position),
   collision:()=>cue("collision","[WRECKAGE STRIKES THE POD HULL]"),launch:()=>cue("launch","[EVACUATION SIGNAL / BOARD THE TRANSFER POD]"),
+  collapse:lane=>cue('hullGroan',`[STRUCTURAL FAILURE ${lane} / MOVE TO A CLEAR LANE]`),
   warning:()=>cue("warning"),sonarPing:()=>cue("sonarPing","[SONAR RETURN]"),
   hullGroan:position=>cue("hullGroan",`[PRESSURE GROAN${direction(position).toUpperCase()} / CONTACT CLOSE]`,position),
   creature:position=>{const p=position||contactPosition;cue("creature",`[LOW CREATURE CALL${direction(p).toUpperCase()}]`,p);},

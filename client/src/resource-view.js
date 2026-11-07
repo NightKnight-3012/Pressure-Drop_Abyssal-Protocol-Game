@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import {oceanHeight} from './ocean.js';
 
-const MAX=12;
+// At most 32 crew drops, ten seeded supplies and one regulator.
+const MAX=44;
 // Moored emergency canisters: six shared draws, no lights, shadows or per-frame animation.
 export function createResourceView(scene) {
   const root=new THREE.Group();root.name='Exterior emergency supplies';scene.add(root);
@@ -16,17 +17,17 @@ export function createResourceView(scene) {
   const cable=batch(new THREE.CylinderGeometry(.009,.009,1,5),dark,MAX);
   const anchor=batch(new THREE.CylinderGeometry(.2,.24,.1,8),dark,MAX);
   const stripe=batch(new THREE.BoxGeometry(.4,.025,.055),marker,MAX);
-  const transform=new THREE.Object3D(),color=new THREE.Color();let key='';
+  const transform=new THREE.Object3D(),color=new THREE.Color(),ray=new THREE.Raycaster();let key='',current=[];
   const put=(mesh,i,x,y,z,sx=1,sy=1,sz=1)=>{transform.position.set(x,y,z);transform.rotation.set(0,0,0);transform.scale.set(sx,sy,sz);transform.updateMatrix();mesh.setMatrixAt(i,transform.matrix);};
   return {
     root,
     update(resources=[]) {
       const next=JSON.stringify(resources);if(key===next)return;key=next;
-      const list=resources.slice(0,MAX);
+      const list=resources.slice(0,MAX);current=list;
       body.count=handle.count=cable.count=anchor.count=stripe.count=list.length;caps.count=list.length*2;
       list.forEach((r,i)=>{
         const length=r.item==='regulator'?1.4:r.item==='flare'?1.05:r.item==='decoy'?.55:.85,diameter=r.item==='regulator'?1.4:r.item==='flare'?.62:r.item==='decoy'?1.2:1;
-        const y=.38,floor=oceanHeight(r.x,r.z);
+        const floor=r.ext===false?0:oceanHeight(r.x,r.z),y=r.ext===false?.1+.22*diameter:.38;
         put(body,i,r.x,y,r.z,length,diameter,diameter);body.setColorAt(i,color.setHex(r.item==='regulator'?0xc5aa68:r.item==='repair'?0xa58b60:r.item==='flare'?0x9c6444:0x67818a));
         for(let end=0;end<2;end++)put(caps,i*2+end,r.x+(end?1:-1)*length*.45,y,r.z,.065,diameter*1.08,diameter*1.08);
         put(handle,i,r.x,y+.22*diameter+.08,r.z,.9,.6,1);
@@ -35,6 +36,15 @@ export function createResourceView(scene) {
       });
       for(const mesh of root.children)mesh.instanceMatrix.needsUpdate=true;
       if(body.instanceColor)body.instanceColor.needsUpdate=true;
+    },
+    contact(id,origin){
+      const i=current.findIndex(r=>r.id===id);if(i<0)return null;
+      root.updateWorldMatrix(true,true);body.computeBoundingSphere();
+      const matrix=new THREE.Matrix4();body.getMatrixAt(i,matrix);matrix.premultiply(body.matrixWorld);
+      const point=new THREE.Vector3().setFromMatrixPosition(matrix);ray.set(origin,point.clone().sub(origin).normalize());
+      const hit=ray.intersectObject(body).find(h=>h.instanceId===i);if(!hit)return null;
+      const normal=hit.face.normal.clone().applyNormalMatrix(new THREE.Matrix3().getNormalMatrix(matrix));
+      return {point:hit.point,normal};
     },
     dispose() {root.removeFromParent();for(const mesh of root.children){mesh.dispose();mesh.geometry.dispose();}for(const material of [metal,dark,silver,marker])material.dispose();}
   };

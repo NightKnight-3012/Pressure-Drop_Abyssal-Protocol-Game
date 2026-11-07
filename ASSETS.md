@@ -88,3 +88,9 @@ Board mounts and evidence-terminal stands are original procedural geometry; equi
 Survey post feet and secondary reflector bands are original geometry merged into the existing exterior material batches; no new textures, downloads or light sources.
 
 Escape corridor guide dashes, secondary posts, torn extruded deck plates and exposed frames are original procedural geometry in the existing five material batches. No downloaded assets, new textures or additional lights.
+
+Dropped equipment reuses the original procedural emergency-canister geometry, six instanced material batches and local hold-start recording, with specific set-down/recovery captions. Indoor supports rest on the station floor. No new downloads, lights, recordings, services or external licences.
+
+The three authored collapse sections in client/src/collapse-section.js are original procedural lift/wreck/conduit geometry, merged into two material draws per section. They reuse the pod's metal/hazard materials and the original hull-groan recording with lane-specific captions. No downloaded assets, added lights, paid services or new licences.
+
+Articulated fingers, opposable thumbs, two-bone arm rig, lower work stance and offset wrench head are original procedural geometry/animation in client/src/hand-rig.js and work-hands.js. The 28 finger segments share one instanced draw; four sleeve segments share another. Contact queries use existing equipment geometry, with no imported rigs, paid services, new recordings or new licences.

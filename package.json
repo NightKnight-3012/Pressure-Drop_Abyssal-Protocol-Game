@@ -16,7 +16,7 @@
     "build": "npm run build -w client",
     "start": "node server/index.js",
     "bots": "node server/scripts/bots.js",
-    "test": "npm run test:diver-danger && npm run test:flooding && npm run test:frame-stats && npm run test:control-hints && npm run test:route-polish && npm run test:creature-polish && npm run test:boards && node test/dock-accessibility.mjs && npm run test:hands && npm run test:online && node test/practice-checks.mjs && node test/practice-net.mjs && node test/sub-depth-checks.mjs && node test/sub-net.mjs && node test/fieldwork-checks.mjs && node test/fieldwork-net.mjs && node test/story-controls-checks.mjs && node test/salvage-checks.mjs && node test/survey-checks.mjs && node test/resource-checks.mjs && node test/locker-checks.mjs && node test/equipment-checks.mjs && node test/role-gear-checks.mjs && node test/complication-checks.mjs && node test/release-checks.mjs && node test/performance-checks.mjs && node test/station-checks.mjs && node test/presentation-checks.mjs && node test/expansion-checks.mjs && node test/audio-checks.mjs && node test/escape-craft-checks.mjs && node test/ocean-checks.mjs && node server/scripts/test-rules.js && node server/scripts/test-tactical.js && node server/scripts/test-net.js",
+    "test": "npm run test:collapse && npm run test:gear-sharing && npm run test:diver-danger && npm run test:flooding && npm run test:frame-stats && npm run test:control-hints && npm run test:route-polish && npm run test:creature-polish && npm run test:boards && node test/dock-accessibility.mjs && npm run test:hands && npm run test:online && node test/practice-checks.mjs && node test/practice-net.mjs && node test/sub-depth-checks.mjs && node test/sub-net.mjs && node test/fieldwork-checks.mjs && node test/fieldwork-net.mjs && node test/story-controls-checks.mjs && node test/salvage-checks.mjs && node test/survey-checks.mjs && node test/resource-checks.mjs && node test/locker-checks.mjs && node test/equipment-checks.mjs && node test/role-gear-checks.mjs && node test/complication-checks.mjs && node test/release-checks.mjs && node test/performance-checks.mjs && node test/station-checks.mjs && node test/presentation-checks.mjs && node test/expansion-checks.mjs && node test/audio-checks.mjs && node test/escape-craft-checks.mjs && node test/ocean-checks.mjs && node server/scripts/test-rules.js && node server/scripts/test-tactical.js && node server/scripts/test-net.js",
     "test:survey": "node test/survey-checks.mjs",
     "test:survey:visual": "node test/review-current-ui.mjs --station-only --survey-only",
     "test:resources": "node test/resource-checks.mjs",
@@ -56,7 +56,7 @@
     "moderate": "node server/scripts/moderate.js",
     "test:online": "node test/online-checks.mjs && node test/online-net.mjs && node test/online-ui.mjs && node test/deployment-checks.mjs",
     "test:online:visual": "node test/review-current-ui.mjs --online-only",
-    "test:hands": "node test/hands-checks.mjs",
+    "test:hands": "node test/hands-checks.mjs && node test/hand-rig-checks.mjs",
     "test:hands:visual": "node test/review-current-ui.mjs --hands-only",
     "test:boards": "node test/board-mounts.mjs",
     "test:creature-polish": "node test/creature-polish.mjs",
@@ -67,7 +67,9 @@
     "test:flooding": "node test/flooding-checks.mjs && node test/flooding-net.mjs",
     "test:flooding:visual": "node test/review-current-ui.mjs --flood-only",
     "test:diver-danger": "node test/diver-danger-checks.mjs",
-    "test:diver-danger:visual": "node test/review-current-ui.mjs --contact-only"
+    "test:diver-danger:visual": "node test/review-current-ui.mjs --contact-only",
+    "test:gear-sharing": "node test/gear-sharing-checks.mjs && node test/gear-sharing-net.mjs",
+    "test:collapse": "node test/collapse-checks.mjs"
   },
   "devDependencies": {
     "concurrently": "^9.1.2",

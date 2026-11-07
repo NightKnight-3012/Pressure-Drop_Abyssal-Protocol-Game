@@ -297,6 +297,7 @@ select { display: block; width: 100%; margin-top: 8px; padding: 10px; border: 1p
 .wrist-tabs { display: none; }
 .wrist-panel { display: none; pointer-events: auto; top: 165px; max-height: calc(100vh - 410px); overflow-y: auto; scrollbar-width: thin; scrollbar-color: #688b91 #0b1d25; border-color: #7bb7c34a; background: #06121bef; }
 body.wrist-open .wrist-panel { display: block; }
+body.wrist-open .roster { max-height:calc(100vh - 470px); }
 .systems { max-width: 335px; width: 335px; }
 .roster { width: 240px; max-height: calc(100vh - 300px); }
 body.wrist-open .chat { left: 380px; max-width: min(380px, calc(100vw - 660px)); }
@@ -353,6 +354,8 @@ body.in-sub .interaction-stack {display:none;}
 .gear-slots { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:6px; }
 .gear-slot { flex:1; min-width:0; padding:8px 4px; min-height:44px; font:11px/1.3 Consolas,monospace; letter-spacing:0; }
 .gear-slot[aria-pressed="true"] { border-color:#c6dddf; box-shadow:inset 0 -2px #c6dddf; }
+#gear-drop { display:none; width:100%; min-height:44px; white-space:normal; }
+.wrist-open #gear-drop { display:block; }
 .gear small { display:block; margin-top:7px; font:10px/1.4 Consolas,monospace; color:#b8cbd0; }
 #gear-contact { white-space:pre-line; border-top:1px solid #779aa23d; padding-top:6px; color:#d3e9e7; }
 .locker-panel { position:absolute; top:175px; right:20px; width:310px; max-height:calc(100vh - 390px); padding:14px; overflow-y:auto; border:1px solid #8caeb077; border-radius:12px; background:#04131bf2; pointer-events:auto; font:11px/1.5 Consolas,monospace; }
@@ -365,7 +368,7 @@ body.locker-open .interaction, body.locker-open #look-prompt, body.locker-open .
 @media(max-width:600px) { .locker-panel { top:205px; right:14px; width:calc(100vw - 28px); max-height:calc(100vh - 430px); padding:10px; } .locker-panel p { margin:6px 0; } .locker-panel .locker-item { min-height:36px; padding:6px; } }
 #game-hud:has(#gear-contact:not(.hidden)) .controls { visibility:hidden; }
 .controls { margin-bottom:132px; }
-body.in-pod .gear, body.wrist-open .gear { display:none; }
+body.in-pod .gear { display:none; }
 #match-timeline { text-align:left; margin:16px 0; font:12px/1.6 Consolas,monospace; }
 #match-timeline summary { cursor:pointer; color:#bbd9dd; }
 #timeline-entries { max-height:180px; overflow-y:auto; padding-left:22px; }
@@ -422,6 +425,7 @@ body.in-epilogue #game-hud > :not(#epilogue) { visibility: hidden; }
   .wrist-tabs button { min-height: 28px; padding: 4px 14px; font-size: 10px; }
   .wrist-tabs button[aria-pressed="true"] { border-color: #8fc5c9; background: #183d47; }
   body.wrist-open .roster { display: none; }
+  body.wrist-open.wrist-crew .roster { max-height:calc(100vh - 506px); }
   body.wrist-open.wrist-crew .systems { display: none; }
   body.wrist-open.wrist-crew .roster { display: block; }
   body.wrist-open .interaction, body.wrist-open #look-prompt, body.wrist-open .chat { visibility: hidden; }

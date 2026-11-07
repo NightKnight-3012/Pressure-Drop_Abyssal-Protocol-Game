@@ -1,5 +1,7 @@
 # Balance pass: 7 November 2026
 
+Follow-up verification, 8 November: after equipment hand-offs and authored replacements for the existing falling obstacles, the standard 60-seed sample at every crew size remains **100/100/100/98/90/97/90/100%** mission wins (480 matches). Damage, flooding, hearing and obstacle count were unchanged in this development pass. Bots do not exercise equipment hand-offs, so transfer-specific balance still needs human playtesting. Seven/eight-player full-crew escapes remain 0% in this standard sample; the earlier release gate still applies.
+
 ## Changes
 
 Continuous EVA grab damage uses a six-metre close-contact radius and a three-second warning window. Breaking contact decays exposure. Strike damage/range and grab damage rate remain unchanged. Warning state and damage are server-owned, with a personal HUD warning and captioned suit cue. Hearing gain decreases gently above four crew to account for simultaneous crew noise. The flooding/pump/helmet-air redesign is retained.

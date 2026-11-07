@@ -152,6 +152,9 @@ export function tickFinale(game, players, dt, events) {
       else if (!(age <= 1.3 && centered && braking)) pod.dockProgress = Math.max(0, pod.dockProgress - dt * 0.5);
     }
     pod.oxygen = clamp(pod.oxygen - dt * 0.62, 0, 100);
+    for(const gate of pod.route)if(gate.kind==='falling'&&!gate.warned&&!gate.passed&&pod.progress>=gate.at-13&&pod.progress<gate.at){
+      gate.warned=true;events.push({type:'podCollapse',at:gate.at,lane:gate.lane});
+    }
     for (const gate of pod.route) if (!gate.passed && pod.progress >= gate.at) {
       gate.passed = true;
       if (Math.abs(pod.lane - gate.lane) < 0.52) { pod.hull -= boost ? 22 : 14; events.push({ type: "podCollision", lane: gate.lane }); }

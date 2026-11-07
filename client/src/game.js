@@ -31,6 +31,7 @@ import {PRACTICE_STEPS,practiceTargetAllowed} from '../../shared/practice.js';
 import {saveEvidence} from './case-file.js';
 import {EXTERIOR_ZONES,exteriorZone} from '../../shared/exterior.js';
 import {createWorkHands,workPose,workAim} from './work-hands.js';
+import {cameraContact} from './hand-rig.js';
 
 const SEND_INTERVAL_MS = 70;
 const HOLD_RETRY_MS = 600;
@@ -253,6 +254,11 @@ function nearestTarget() {
     }
   }
   if(s.stage==='main')for(const point of LOGS){if(point.ext!==me.ext||!s.story?.available.includes(point.id)||s.story.found.includes(point.id))continue;const d=Math.hypot(p.x-point.x,p.z-point.z);if(d<LOG_RANGE-.05)consider({kind:'log',id:`log:${point.id}`,point,d});}
+  if(s.stage==='main')for(const point of s.drops||[]){
+    if(point.ext!==me.ext||!me.ext&&roomAt(p.x,p.z)!==point.room)continue;
+    const d=Math.hypot(p.x-point.x,p.z-point.z);
+    if(d<=RESOURCE_RANGE-.05)consider({kind:'gearPickup',id:point.id,point,d:d-.15});
+  }
   if(me.ext&&s.stage==='main')for(const point of [...(s.resources||[]),...(s.scrap||[])]) {
     const d=Math.hypot(p.x-point.x,p.z-point.z);
     if(d<=RESOURCE_RANGE-.05)consider({kind:'resource',id:point.id,point,d});
@@ -303,8 +309,9 @@ function promptFor(t, me) {
   if(t.kind==='subrepair')return 'HOLD E / REPAIR SURVEY SUB / 5s / USE ONE ALLOY OR REPAIR KIT / +25 HULL';
   if(t.kind==='circuit')return `HOLD E / ${s.roomCircuits?.[t.point.room]?'ISOLATE':'RESTORE'} LOCAL LIGHTING CIRCUIT / STOPS LIVE-WATER SHOCKS`;
   if(t.kind==='log')return `HOLD E / RECOVER RECORD: ${t.point.title.toUpperCase()} / 1s`;
-  if(t.kind==='salvage')return t.id===SALVAGE.install?'HOLD E / INSTALL REGULATOR / 4s / PUMP FLOW +20 POINTS':me.inventory.includes(null)?'HOLD E / RECOVER PUMP REGULATOR / 3s / RETURN TO ENGINEERING':'INVENTORY FULL / USE A TOOL TO CARRY THE REGULATOR';
-  if(t.kind==='resource')return me.inventory?.some(item=>item===null)?`HOLD E / RECOVER ${ITEMS[t.point.item].label.toUpperCase()} / 2s / OPENING MAKES NOISE`:'INVENTORY FULL / USE A TOOL BEFORE RECOVERING SUPPLIES';
+  if(t.kind==='gearPickup')return me.inventory.includes(null)?`HOLD E / TAKE ${ITEMS[t.point.item].label.toUpperCase()} / 1s`:'INVENTORY FULL / Q SELECT / BACKSPACE PUT DOWN';
+  if(t.kind==='salvage')return t.id===SALVAGE.install?'HOLD E / INSTALL REGULATOR / 4s / PUMP FLOW +20 POINTS':me.inventory.includes(null)?'HOLD E / RECOVER PUMP REGULATOR / 3s / RETURN TO ENGINEERING':'INVENTORY FULL / Q SELECT / BACKSPACE PUT DOWN';
+  if(t.kind==='resource')return me.inventory?.some(item=>item===null)?`HOLD E / RECOVER ${ITEMS[t.point.item].label.toUpperCase()} / 2s / OPENING MAKES NOISE`:'INVENTORY FULL / Q SELECT / BACKSPACE PUT DOWN';
   if(t.kind==='locker') {
     const count=Object.values(s.lockers?.[t.point.id]||{}).reduce((a,b)=>a+b,0);
     return `PRESS E / ${t.point.label.toUpperCase()} / ${count} SHARED SUPPLIES`;
@@ -365,7 +372,7 @@ function interactStart() {
     G.input.releaseMouse();(document.querySelector('#locker-stock button:not(:disabled)')||document.getElementById('locker-close')).focus();return;
   }
   closeLocker();
-  if(t.kind==='resource'&&!meOf().inventory.some(item=>item===null)){G.hud.toast('INVENTORY FULL / USE A TOOL TO MAKE ROOM');sfx.error();return;}
+  if(t.kind==='resource'&&!meOf().inventory.some(item=>item===null)){G.hud.toast('INVENTORY FULL / Q SELECT / BACKSPACE PUT DOWN');sfx.error();return;}
   if (t.kind === "station" && G.state.calibrations?.[t.id] && !G.state.calibrations[t.id].solved && t.state === "ready") {
     G.repairId = t.id; G.input.releaseMouse(); refreshInput();
     G.hud.showRepair(t.id, G.state.calibrations[t.id], net.calibrate, closeRepair); return;
@@ -475,6 +482,7 @@ function onKey(code) {
   if (/^Digit[1-4]$/.test(code)) G.hud.useGear(Number(code.slice(-1)) - 1);
   else if (code === 'KeyQ') G.hud.cycleGear();
   else if (code === 'KeyX') G.hud.useGear();
+  else if (code === 'Backspace') G.hud.dropGear();
 }
 
 // ================================================================== frame loop
@@ -643,7 +651,7 @@ function step() {
   if(me?.contactWarning&&now-(G.lastContactWarn??-Infinity)>4000){G.lastContactWarn=now;sfx.closeContact();}
   const mine = myHold();
   const workTarget=mine?nearestTarget():null,workPoint=workTarget?.st||workTarget?.b||workTarget?.o||workTarget?.point;
-  G.workHands.update(workPose({hold:mine,working:G.holdWanted&&workTarget?.id===mine?.id,blocked:!canAct()||G.phase!=='playing'||!!G.epilogue||G.viewPod||!!G.lockerId||G.consoleOpen||G.votingShown||document.body.classList.contains('wrist-open'),player:me,stage:state.stage,aim:workAim(workPoint,camera.position,G.input.yaw,G.input.pitch)}),dt,reduced);
+  G.workHands.update(workPose({hold:mine,working:G.holdWanted&&workTarget?.id===mine?.id,blocked:!canAct()||G.phase!=='playing'||!!G.epilogue||G.viewPod||!!G.lockerId||G.consoleOpen||G.votingShown||document.body.classList.contains('wrist-open'),player:me,stage:state.stage,aim:workAim(workPoint,camera.position,G.input.yaw,G.input.pitch),contact:cameraContact(G.world.workSurface(workTarget,camera.position),camera)}),dt,reduced);
   if (mine) {
     if (!G.wasHolding) sfx.holdStart();
     G.wasHolding = true;
@@ -742,6 +750,14 @@ export function handleEvent(e) {
     case 'salvageRecovered': sfx.recover({x:e.x,z:e.z});G.hud.toast('REGULATOR RECOVERED / CARRIER: RETURN THROUGH MEDICAL AIRLOCK. HOLD E AT REPAIRED ENGINEERING PUMP.');break;
     case 'salvageInstalled': sfx.done();G.hud.toast('REGULATOR INSTALLED / PUMP FLOW +20 POINTS. FILTER MAINTENANCE STILL MATTERS.');break;
     case 'salvageReturned': sfx.warning();G.hud.toast('REGULATOR LOST / RECOVERY CRADLE AT THE WRECK IS AVAILABLE AGAIN.');break;
+    case 'gearDropped':
+      sfx.gearTransfer(false,{x:e.x,z:e.z});
+      if(e.by===G.playerId)G.hud.toast(`${ITEMS[e.item].label.toUpperCase()} PUT DOWN / CREW CAN HOLD E TO RECOVER`);
+      break;
+    case 'gearRecovered':
+      sfx.gearTransfer(true,{x:e.x,z:e.z});
+      if(e.by===G.playerId)G.hud.toast(`${ITEMS[e.item].label.toUpperCase()} RECOVERED / SLOT ${e.slot+1}`);
+      break;
     case 'resourceRecovered':
       sfx.recover({x:e.x,z:e.z});
       if(e.by===G.playerId)G.hud.toast(`${ITEMS[e.item].label.toUpperCase()} RECOVERED / SLOT ${e.slot+1} / RETURN THROUGH THE MEDICAL AIRLOCK`);
@@ -794,6 +810,7 @@ export function handleEvent(e) {
     case "finale": G.hud.toast("FINAL APPROACH · PILOT THROUGH THE WRECKAGE. THE RADIO LINK REMAINS OPEN."); break;
     case "pilotChanged": G.hud.toast(`${G.state.players.find(p => p.id === e.id)?.name || "A CREW MEMBER"} NOW HAS THE CONTROLS`); break;
     case "podCollision": sfx.collision(); G.hud.toast("WRECKAGE IMPACT · REPAIR AND KEEP MOVING"); break;
+    case 'podCollapse': if(G.viewPod)sfx.collapse(['LEFT','CENTRE','RIGHT'][e.lane+1]);break;
     case "podStrike": sfx.impact(); G.hud.toast("POD HULL DAMAGE · REPAIR AND KEEP MOVING"); break;
     case "podRepair": case "capsuleRepair": sfx.done(); break;
     case "pursuit": sfx.creature(); G.hud.toast(`CONTACT TURNING TOWARD THE ${e.target.toUpperCase()}`); break;
