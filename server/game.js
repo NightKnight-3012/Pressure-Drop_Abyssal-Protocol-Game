@@ -11,7 +11,7 @@ import {
 } from "../shared/layout.js";
 import { createLeviathan, stepLeviathan, levPosition } from "./leviathan.js";
 import { MISSIONS, FINALE_POINTS, REPAIR_TYPES, repairSpec, atPoint } from "../shared/tactical.js";
-import { beginFinale, finaleInteract, tickFinale, finaleSnapshot } from "./finale.js";
+import { beginFinale, finaleInteract, tickFinale, finaleSnapshot, survivorEnding } from "./finale.js";
 import { ITEMS, ITEM_LIMIT } from "../shared/items.js";
 import { ITEM_TUNING, ITEM_ROLES, startingInventory, lockerStock } from "./items.js";
 import { recordEvents } from "./timeline.js";
@@ -110,7 +110,7 @@ export function resetPlayerForMatch(p, slot) {
   const s = spawnPoint(slot);
   Object.assign(p, {
     slot, x: s.x, z: s.z, rotation: Math.atan2(s.x, s.z), running: false, exterior: false,
-    breath:FLOODING.breathSeconds, submerged:false, hp: MAX_HP, downed: false, downedAt: 0, lost: false, leftBehind: false, aboard: false,
+    breath:FLOODING.breathSeconds, submerged:false, hp: MAX_HP, downed: false, downedAt: 0, lost: false, leftBehind: false, incapacitatedOutsideAtLaunch:false, aboard: false,
     tasksDone: 0, contribution: 0, credits: {}, escaped: false, ending: null, volunteered: false,
     podRepairAt: 0, suit: TUNING.suitSeconds, stamina: STAMINA.max, winded: false,
     inventory: startingInventory(p.dept), itemReadyAt: 0, lockerReadyAt:0,craftReadyAt:0,flashlight:true,subSeat:null,depth:0,vertical:0,verticalUntil:0,
@@ -796,7 +796,7 @@ export function tickGame(game, players, nowMs = Date.now(), timeScale = 1) {
     const survivor = players.find(p => !p.aboard && !p.escaped && !p.lost);
     if (survivor && chasingStation) game.lev.angle = Math.atan2(survivor.z, survivor.x);
     if (resolved) {
-      for (const p of players.filter(p => p.leftBehind && !p.escaped)) p.ending = (game.finale.history.stationHelpBy[p.id] || 0) >= 6 ? "beacon_sacrifice" : p.volunteered ? "last_stand" : "abandoned";
+      for (const p of players.filter(p => p.leftBehind && !p.escaped)) p.ending = survivorEnding(game.finale,p);
       finish(game, players, players.some(p => p.escaped) ? "win" : "lose", "The last signals have reached their destination.", events);
       game.stage = "done";
     }

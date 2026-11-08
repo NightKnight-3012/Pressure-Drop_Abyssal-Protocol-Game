@@ -454,3 +454,15 @@ The 60-seed-per-size audit with the improved test crew wins 100%, 100%, 100%, 98
 To reproduce one reported balance failure, set START_SEED to its printed seed and run the simulator with that crew size and one run. Leave START_SEED unset for the standard sample. BALANCE_REPORT prints up to three example failure seeds per crew size.
 
 The final balance audit also reports actual lost players, average escaped crew and full-crew escape rates, and includes preventative treatment in the scripted Medical decisions. See BALANCE-REPORT.md for the final standard and separate-seed results, remaining survival concerns and reproduction steps. These final samples supersede earlier percentages above.
+
+### Release audit diagnostics
+
+`npm run audit:eva-travel -- 60` compares the original delayed-arrival simulator with continuous emergency retreat and continuous exterior travel over matching seeds. These optional modes use swim speed and swept exterior collision; indoor travel and the finale driver remain approximations. `npm run test:exterior-travel` checks all required airlock/junction routes, reaction time, speed limits and blocked paths. The default balance mode remains unchanged; PowerShell users can select a diagnostic mode with `$env:EVA_TRAVEL="continuous"` and remove it afterward.
+
+Incapacitated divers now receive an accurate exterior emergency instruction. A diver already down outside when the pod launches receives a casualty epilogue rather than a voluntary-sacrifice story. These changes do not alter damage, revival permissions or escape capacity.
+
+`npm run test:survival-audit` checks read-only phase/cohort reporting and controlled evacuation feasibility; `npm run test:objectives` checks guidance priorities and reachable Medical targets. `npm run audit:evacuation -- 20` exercises healthy crews of every size with zero-, twelve- and twenty-four-second beacon policies. These controlled scenarios start dry, with repaired systems and full health/air, and use scripted movement; their success rate is not a human win-rate estimate.
+
+For a whole-match phase breakdown in PowerShell, set `$env:BALANCE_AUDIT="1"`, then run `npm run balance -- 0 60`. The additional JSON distinguishes losses before evacuation, boarding, the pod, interior survivors and exterior casualties. It reports how many intact crews actually reached the finale. Remove the environment variable afterward with `Remove-Item Env:BALANCE_AUDIT`. The default driver policy and game tuning are unchanged. Movement in the main balance harness still approximates travel by delayed arrival, so contact damage during retreat needs separate validation before tuning changes.
+
+After building, `npm run test:baseline:visual` captures a private eight-player fixture across menus, station lighting, exterior areas, flooding, pod pursuit, docking, shutter and lift at 1280x720 and 520x640. It also checks horizontal overflow and radio/vital-meter separation. Small viewport captures do not establish touch controls or mobile performance. Generated reports and captures belong in ignored `test/artifacts/`, not the public repository.

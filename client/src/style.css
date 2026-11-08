@@ -215,7 +215,7 @@ label { display: block; margin-bottom: 10px; color: #a9c0ca; font-size: 10px; le
 .crew.noisy small { color: #ffa05c; }
 .crew.out { opacity: 0.55; }
 
-.chat { position: absolute; left: 22px; bottom: 128px; width: min(380px, 40vw); }
+.chat { position: absolute; left: 22px; bottom: calc(100% + 8px); width: min(380px, 40vw); }
 .chat .chat-log { max-height: 140px; margin: 0 0 6px; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; text-shadow: 0 1px 3px #000; }
 .chat .chat-line { background: #020c14a0; padding: 2px 6px; transition: opacity 1s; }
 .chat .chat-line.old { opacity: 0.35; }
@@ -492,6 +492,8 @@ body.in-pod .objective { display:none; }
 body.in-pod .toast { top:72px; left:16px; transform:none; max-width:min(260px,28vw); padding:6px 8px; font-size:10px; text-align:left; background:#02101bb3; }
 body.in-pod .captions { top:130px; left:16px; transform:none; width:min(260px,28vw); text-align:left; font-size:10px; }
 body.in-pod .chat { bottom:205px; left:16px; width:min(270px,28vw); max-height:120px; overflow:hidden; }
+body.in-pod .chat .chat-log { max-height:114px; }
+body.in-pod .chat:has(.chat-input:not(.hidden)) .chat-log { max-height:72px; }
 .pod-contact-camera { position:absolute; right:16px; top:126px; width:clamp(128px,22vw,220px); padding:3px; border:1px solid #567f8a; border-radius:5px; pointer-events:none; background:transparent; }
 #pod-camera-label { height:18px; background:#06151ed9; color:#aad9df; font:9px/18px Consolas,monospace; padding-left:4px; white-space:nowrap; }
 #pod-camera-image { width:100%; aspect-ratio:16/9; }

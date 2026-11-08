@@ -1,0 +1,14 @@
+import assert from 'node:assert/strict';
+import {objectiveFor} from '../client/src/objectives.js';
+let checks=0;const check=(name,fn)=>{fn();checks++;console.log('PASS '+name);};
+const diver={id:'eva',dept:'eva',ext:true,x:38,z:0,suit:90,depth:0,hp:100};
+const state=me=>({stage:'main',oxygen:80,lockdown:{active:false},players:[me],stations:{power:'done',pump:'done',console:'done',lifesupport:'done',o2:'ready',j1:'ready',j2:'done',launch:'locked'},salvage:{state:'available',carrier:null}});
+check('optional wreck discovery never replaces an unfinished mandatory cable objective',()=>{const s=state(diver);assert.match(objectiveFor(s,diver),/EVA: repair 1 cable/);assert(!objectiveFor(s,diver).startsWith('OPTIONAL WRECK'));});
+check('optional salvage remains discoverable after required cables are restored',()=>{const s=state(diver);s.stations.j1='done';assert.match(objectiveFor(s,diver),/^OPTIONAL WRECK SALVAGE/);});
+check('return air and submersion warnings retain priority over optional and required work',()=>{const s=state(diver);assert.match(objectiveFor(s,{...diver,suit:1}),/SUIT AIR LOW/);assert.match(objectiveFor(s,{...diver,submerged:true}),/^SUBMERGED/);});
+check('secured regulator cargo still explains the return/installation route',()=>{const s=state(diver);s.salvage={state:'carried',carrier:diver.id};assert.match(objectiveFor(s,diver),/^REGULATOR CARRIED/);});
+check('Medical never receives an impossible exterior, boarded or escaped revive target',()=>{const med={id:'med',dept:'medical',hp:100},s=state(med);for(const flag of ['ext','aboard','escaped','lost']){s.players=[med,{id:'hurt',name:'Unreachable',hp:0,down:true,[flag]:true}];assert(!/revive Unreachable/.test(objectiveFor(s,med)));}});
+check('Medical still receives valid interior revival and treatment instructions',()=>{const med={id:'med',dept:'medical',hp:100},s=state(med);s.players.push({id:'hurt',name:'Rae',hp:0,down:true});assert.match(objectiveFor(s,med),/revive Rae/);s.players[1].down=false;s.players[1].hp=40;assert.match(objectiveFor(s,med),/treat Rae/);});
+check('initial power and low Medical oxygen remain actionable priorities',()=>{const med={id:'med',dept:'medical',hp:100},s=state(med);s.stations.power='ready';assert.match(objectiveFor(s,med),/^Restore power/);s.stations.power='done';s.oxygen=10;assert.match(objectiveFor(s,med),/^OXYGEN LOW/);});
+check('incapacitated divers are not promised an unavailable exterior revive',()=>{const p={id:'diver',dept:'eva',down:true,ext:true};assert.match(objectiveFor(state(p),p),/Field revival is unavailable/);p.ext=false;assert.match(objectiveFor(state(p),p),/Call your crew/);});
+console.log(`${checks} objective-readability checks passed`);

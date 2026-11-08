@@ -1,3 +1,5 @@
+import {pathToFileURL} from 'node:url';
+import {createExteriorTravel,advanceExteriorTravel} from './exterior-travel.js';
 // Balance check: a scripted, sensible crew plays full matches at every crew size.
 //   npm run balance            (all sizes, 12 seeds each)
 //   npm run balance -- 6 30    (6 players, 30 seeds)
@@ -10,12 +12,14 @@ import {CIRCUITS} from '../../shared/fieldwork.js';
 import { STATIONS, DEPT_IDS, DOOR_STATION, roomAt } from "../../shared/layout.js";
 import { calibrate, driveFinale } from "./crew-driver.js";
 import { FINALE_POINTS } from "../../shared/tactical.js";
+import {createSurvivalAudit,summarizeSurvival} from './survival-audit.js';
 
 const front = (st, d = 1.3) => ({ x: st.x + Math.sin(st.rot) * d, z: st.z + Math.cos(st.rot) * d });
 const DT = 0.1;
 const WALK = 3;   // effective walking speed in m/s (corners, doors, looking around)
 
-function simulate(n, seed, { reaction = Number(process.env.REACTION) || 9, runChance = process.env.RUN !== undefined ? Number(process.env.RUN) : 0.12 } = {}) {
+export function simulate(n, seed, { reaction = Number(process.env.REACTION) || 9, runChance = process.env.RUN !== undefined ? Number(process.env.RUN) : 0.12,movement=process.env.EVA_TRAVEL||'legacy',audit=!!process.env.BALANCE_AUDIT } = {}) {
+  if(!['legacy','retreat','continuous'].includes(movement))throw Error('EVA_TRAVEL must be legacy, retreat or continuous.');
   let NOW = 1_000_000;
   const randomDecision = mulberry32(seed ^ 0x51a7);
   const players = Array.from({ length: n }, (_, i) => ({
@@ -25,13 +29,22 @@ function simulate(n, seed, { reaction = Number(process.env.REACTION) || 9, runCh
   assignDepartments(players);
   const game = createGame({ players, now: NOW, seed });
   game.holds.clear();
+  const survivalAudit=audit?createSurvivalAudit():null;survivalAudit?.observe(game,players);
   const stats = { minO2: 100, maxFlood: 0, lost: 0,drownDowns:0,airDowns:0,impactDowns:0,otherDowns:0,evaDowns:0,evaAirDowns:0,evaContactDowns:0,electricDowns:0,skitterDowns:0 };
   let overrideTried = false;
+  const travelStats={routes:0,blocked:0,metres:0};
 
   const dist = (p, pos) => Math.hypot(p.x - pos.x, p.z - pos.z);
   // Walk to a spot (teleport after the walking time), then start the hold.
   function go(p, pos, id) {
-    p.plan = { at: game.time + dist(p, pos) / WALK + reaction * (0.6 + randomDecision() * 0.8), pos, id }; // humans hesitate
+    const delay=reaction*(0.6+randomDecision()*0.8);
+    if(movement==='continuous'&&p.exterior){planSwim(p,pos,id,delay);return;}
+    p.plan = { at: game.time + dist(p, pos) / WALK + delay, pos, id }; // humans hesitate
+  }
+  function planSwim(p,pos,id,delay){
+    const travel=createExteriorTravel(p,pos,game.time,delay);
+    if(!travel){travelStats.blocked++;p.plan=null;p.busyUntil=game.time+2;return;}
+    travelStats.routes++;p.plan={at:Infinity,pos,id,travel};
   }
   const idle = (p) => !p.plan && !game.holds.has(p.id) && isActive(p);
   const taskReady = (id) => game.tasks[id] && !game.tasks[id].done && !(STATIONS[id].requires || []).some((r) => r === "junctions" ? !game.activeJunctions.every((j) => game.tasks[j].done) : !game.tasks[r].done) &&
@@ -41,7 +54,14 @@ function simulate(n, seed, { reaction = Number(process.env.REACTION) || 9, runCh
   for (let step = 0; step < 3600 / DT && game.status === "playing"; step++) {
     NOW += DT * 1000;
     for (const p of players) { p.lastPacket = NOW; if (step % 30 === 0) p.running = !p.exterior && randomDecision() < runChance; } // humans sprint sometimes
+    for(const p of players)if(p.plan?.travel&&isActive(p)&&p.exterior){
+      const result=advanceExteriorTravel(p,p.plan.travel,game.time+DT);travelStats.metres+=result.moved;
+      if(result.blocked){travelStats.blocked++;p.plan=null;p.busyUntil=game.time+2;}
+      else if(result.arrived){p.plan.travel=null;p.plan.at=game.time+DT;}
+    }
+    const phaseBeforeTick=game.stage;
     const events = tickGame(game, players, NOW);
+    survivalAudit?.observe(game,players,phaseBeforeTick);
     stats.minO2 = Math.min(stats.minO2, game.oxygen);
     stats.maxFlood = Math.max(stats.maxFlood, ...Object.values(game.rooms).map((r) => r.flood));
     for (const e of events){if(e.type==='lost')stats.lost++;if(e.type==='down'){const p=players.find(p=>p.id===e.id);const cause=!p.exterior&&p.breath<=0?'drownDowns':!p.exterior&&game.oxygen<=0?'airDowns':events.some(e=>e.type==='impact'&&e.room===roomAt(p.x,p.z))?'impactDowns':'otherDowns';stats[cause]++;if(cause==='otherDowns'){if(p.exterior){stats.evaDowns++;if(p.suit<=0)stats.evaAirDowns++;else stats.evaContactDowns++;}else if(game.threats.electric?.room===roomAt(p.x,p.z)&&game.roomCircuits[roomAt(p.x,p.z)])stats.electricDowns++;else if(game.threats.skitters.some(s=>Math.hypot(s.x-p.x,s.z-p.z)<1))stats.skitterDowns++;}}}
@@ -50,7 +70,9 @@ function simulate(n, seed, { reaction = Number(process.env.REACTION) || 9, runCh
     const contact={x:Math.cos(game.lev.angle)*game.lev.dist,z:Math.sin(game.lev.angle)*game.lev.dist};
     for(const p of players)if(isActive(p)&&p.exterior&&(['approach','attack'].includes(game.lev.state)&&dist(p,contact)<18||p.suit<25)&&p.plan?.id!=='airlock_out'&&game.holds.get(p.id)?.id!=='airlock_out'){
       const decoy=p.inventory.indexOf('decoy');if(decoy>=0)useItem(game,players,p,decoy);
-      cancelHold(game,p.id);p.plan={at:game.time+2+dist(p,front(STATIONS.airlock_out))/WALK,pos:front(STATIONS.airlock_out),id:'airlock_out'};
+      cancelHold(game,p.id);
+      if(movement!=='legacy')planSwim(p,front(STATIONS.airlock_out),'airlock_out',2);
+      else p.plan={at:game.time+2+dist(p,front(STATIONS.airlock_out))/WALK,pos:front(STATIONS.airlock_out),id:'airlock_out'};
     }
     // ---- arrivals
     for (const p of players) {
@@ -130,9 +152,10 @@ function simulate(n, seed, { reaction = Number(process.env.REACTION) || 9, runCh
     }
   }
   if (game.status === "playing" && process.env.DEBUG_STUCK) console.log(JSON.stringify({ stage: game.stage, tasks: Object.fromEntries(Object.entries(game.tasks).map(([k, v]) => [k, v.done])), lock: game.lockdown, holds: [...game.holds], players: players.map((p) => ({ id: p.id, dept: p.dept, x: +p.x.toFixed(1), z: +p.z.toFixed(1), ext: p.exterior, plan: p.plan && p.plan.id, down: p.downed, lost: p.lost, busy: +p.busyUntil.toFixed(0) })), rooms: game.rooms, vote: game.vote && { k: game.vote.k, ballots: game.vote.ballots }, boarding: game.boarding }, null, 1));
-  return { seed,failureStage:game.stage,win: game.status === "win", status: game.status, time: Math.round(game.time), grade: game.outcome?.grade, reason: game.outcome?.reason, aboard: game.outcome?.aboard.length ?? 0, ...stats,lost:players.filter(p=>p.lost).length,escaped:players.filter(p=>p.escaped).length,allEscaped:players.every(p=>p.escaped),podEscaped:game.finale?.pod.status==='escaped', lockdownHandled: overrideTried };
+  return { movement,travel:{...travelStats,metres:+travelStats.metres.toFixed(1)},survivalAudit:survivalAudit?.result(players),seed,failureStage:game.stage,win: game.status === "win", status: game.status, time: Math.round(game.time), grade: game.outcome?.grade, reason: game.outcome?.reason, aboard: game.outcome?.aboard.length ?? 0, ...stats,lost:players.filter(p=>p.lost).length,escaped:players.filter(p=>p.escaped).length,allEscaped:players.every(p=>p.escaped),podEscaped:game.finale?.pod.status==='escaped', lockdownHandled: overrideTried };
 }
 
+if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){
 const only = Number(process.argv[2]);
 const seeds = Number(process.argv[3]) || 12;
 const sizes = only ? [only] : [1, 2, 3, 4, 5, 6, 7, 8];
@@ -141,6 +164,7 @@ let allGood = true;
 for (const n of sizes) {
   const runs = Array.from({ length: seeds }, (_, i) => simulate(n, (process.env.START_SEED!==undefined?Number(process.env.START_SEED):1000+n) + i * 37));
   const wins = runs.filter((r) => r.win).length;
+  if(process.env.BALANCE_AUDIT)console.log('        evacuation audit: '+JSON.stringify({crew:n,...summarizeSurvival(runs)}));
   const avg = (k) => runs.reduce((s, r) => s + r[k], 0) / runs.length;
   console.log(`${String(n).padStart(5)}   ${String(Math.round((wins / runs.length) * 100)).padStart(4)}%  ${String(Math.round(avg("time"))).padStart(6)}s  ${avg("minO2").toFixed(0).padStart(9)}%  ${avg("maxFlood").toFixed(2).padStart(9)}m  ${avg("lost").toFixed(1).padStart(4)}  ${String(runs[0].aboard ? "" : "").padStart(1)}${n < 4 ? n : [3, 4, 5, 6, 6][n - 4]}  ${avg('escaped').toFixed(1).padStart(5)}/${n}  ${Math.round(runs.filter(r=>r.allEscaped).length/runs.length*100).toString().padStart(4)}%`);
   if(process.env.BALANCE_REPORT){const reasons={};for(const r of runs.filter(r=>!r.win))reasons[r.reason||r.status]=(reasons[r.reason||r.status]||0)+1;console.log('        loss breakdown: '+JSON.stringify(reasons)+' / observed down contexts '+JSON.stringify(Object.fromEntries(['drownDowns','airDowns','impactDowns','otherDowns','evaDowns','evaAirDowns','evaContactDowns','electricDowns','skitterDowns'].map(k=>[k,+avg(k).toFixed(2)]))));}
@@ -149,3 +173,5 @@ for (const n of sizes) {
 }
 void TUNING; void DEPT_IDS;
 process.exit(allGood ? 0 : 1);
+
+}

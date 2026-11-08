@@ -18,11 +18,19 @@ See [README](README.md) for setup/mechanics, [TACTICAL-HORROR](TACTICAL-HORROR.m
 
 ## Validation baseline
 
-The latest gameplay/hand-rig pass completed the full npm test chain, including 106 original network checks and additional dedicated suites, 185 client simulation checks, 12 existing hand checks plus 11 articulation/contact checks, and a production build. Focused Chrome captures cover equipment, full-crew layout, escape scenery and panel/floor work at 1280x720 and 520x640.
+The latest gameplay/hand-rig pass completed the full npm test chain, including 106 original network checks and additional dedicated suites, 187 client simulation checks, 12 existing hand checks plus 11 articulation/contact checks, and a production build. Focused Chrome captures cover equipment, full-crew layout, escape scenery and panel/floor work at 1280x720 and 520x640.
 
 Client simulation uses a stub renderer. Some scenery captures are isolated previews. These are not a complete human playthrough, security audit or hardware performance test. The main bundle still exceeds the build's 500KB warning threshold.
 
 Across 480 scripted matches, mission win rates were 90-100% at every crew size. A win means at least one escape; full-crew escape remained 0% for seven/eight-player scripted crews. Bots do not exercise all optional activities or hand-offs. See [BALANCE-REPORT](BALANCE-REPORT.md) for methodology, results and reproduction.
+
+## Immersion audit and first readability corrections
+
+Reusable survival diagnostics separate pre-finale, boarding, pod, interior-survivor and exterior-casualty losses. In the 60-seed-per-size whole-match sample, no seven/eight-player crew entered the finale with everyone alive and conscious. Eight-player crews averaged 3.62 already lost at entry. A separate 480-run healthy-entry audit fully extracted every crew across three beacon timings; it demonstrates feasibility, not human difficulty. The main harness still approximates retreat as delayed arrival, which needs validation before further tuning. See BALANCE-REPORT.md and the audit commands in README.
+
+Required EVA work now stays ahead of optional wreck salvage; Medical guidance excludes unreachable exterior/boarded/escaped patients. Radio history is anchored above the vital meters, and pod history reserves room for typing. The objective selector has eight focused checks; survival diagnostics have nine. The latest client simulation passed 187 checks. Hardware, unfamiliar-player and external-network gates remain open.
+
+The gameplay-integrity follow-up adds collision-aware EVA simulator modes and sixteen required-route checks. Its 1,440 paired matches do not establish a simple travel-model fix for large-crew survival. Default twelve-seed balance currently fails its five-player threshold (75%), although the sixty-seed sample reaches 90%; this remains an open release concern. Gameplay tuning is unchanged. A diver incapacitated outside before launch now receives an accurate casualty epilogue and HUD guidance, while actual beacon sacrifices retain their existing ending.
 
 ## Required release checks
 

@@ -21,8 +21,14 @@ export function beginFinale(game, players, events) {
     creature: { target: "pod", committedAt: game.time, noisePod: 0, noiseStation: 0, stationStrikeAt: game.time + 14 },
     history: { beaconSeconds: 0, diversions: 0, podHelpSeconds: 0, stationHelpBy: {}, podHelpBy: {}, capsuleWork: 0 }
   };
-  for (const p of players) if (!p.aboard && !p.lost) { p.leftBehind = true; p.ending = null; }
+  for (const p of players) if (!p.aboard && !p.lost) { p.leftBehind = true; p.ending = null; p.incapacitatedOutsideAtLaunch = !!(p.exterior && p.downed); }
   events.push({ type: "finale", pilot: game.finale.pod.pilot });
+}
+
+export function survivorEnding(finale,p) {
+  if ((finale.history.stationHelpBy[p.id] || 0) >= 6) return 'beacon_sacrifice';
+  if (p.incapacitatedOutsideAtLaunch) return 'eva_lost';
+  return p.volunteered ? 'last_stand' : 'abandoned';
 }
 
 export function finaleInteract(game, players, p, id, events) {

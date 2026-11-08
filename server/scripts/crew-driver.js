@@ -11,7 +11,7 @@ export function calibrate(game, p, id) {
     for (let i = 1; i <= 3; i++) if ((spec.value & (1 << (i - 1))) !== (spec.target & (1 << (i - 1)))) repairInput(game, p, id, i);
   } else repairInput(game, p, id, spec.target);
 }
-export function driveFinale(game, players, { survivor = "escape" } = {}) {
+export function driveFinale(game, players, { survivor = "escape",beaconSeconds=12 } = {}) {
   if (game.stage === "boarding") {
     for (const p of players.filter(p => !p.lost && !p.downed && !p.leftBehind && !p.aboard)) {
       Object.assign(p, FINALE_POINTS.board); startHold(game, players, p, "board");
@@ -33,7 +33,7 @@ export function driveFinale(game, players, { survivor = "escape" } = {}) {
   const lead = stationCrew[0];
   if (!lead) return;
   const s = f.station;
-  if (survivor === "sacrifice" || game.time - f.since < 12) {
+  if (survivor === "sacrifice" || game.time - f.since < beaconSeconds) {
     if (!s.beacon && s.power > 2) { Object.assign(lead, FINALE_POINTS.beacon); startHold(game, players, lead, "beacon"); }
     return;
   }

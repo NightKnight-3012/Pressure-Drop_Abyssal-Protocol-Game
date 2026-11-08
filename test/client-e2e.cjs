@@ -386,6 +386,10 @@ const until = async (fn, ms = 6000) => { const t = Date.now(); while (Date.now()
   if(!hatchWorked)console.log("BOARDING DEBUG",JSON.stringify({stage:game.stage,players:P.map(p=>({id:p.id,conn:p.connected,down:p.downed,lost:p.lost,aboard:p.aboard,seat:p.subSeat,x:p.x,z:p.z})),prompt:txt("interaction"),toast:txt("toast"),holds:[...game.holds]}));
   ok("using the hatch seats the player instead of ending the game",hatchWorked&&!vis("game-over"));
   ok("pod cockpit presents piloting and supporting controls", await until(() => vis("pod-hud") && /PILOTING/.test(txt("pod-role")), 6000));
+  await tap('Enter');
+  ok('pod crew can open radio text without leaving their vehicle role',vis('chat-input')&&vis('pod-hud'));
+  $('chat-input').dispatchEvent(new w.KeyboardEvent('keydown',{key:'Escape',code:'Escape',bubbles:true}));
+  ok('closing pod radio restores controls without opening pause',!vis('chat-input')&&!vis('pause'));
   ok("boarding closes the wrist computer to protect the windshield", !w.document.body.classList.contains("wrist-open"));
   await tap("Tab");
   ok("flight controls cannot reopen station wrist panels", !w.document.body.classList.contains("wrist-open"));

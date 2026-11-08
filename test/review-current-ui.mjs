@@ -10,6 +10,7 @@ import { attachGame } from "../server/net.js";
 import {createRepository} from "../server/db.js";
 import { snapshotGame, useItem, buildSummary, takeLockerItem, startHold, cancelHold, dropItem } from "../server/game.js";
 import { recordEvents } from '../server/timeline.js';
+import {beginFinale} from '../server/finale.js';
 
 const artifacts = resolve("test/artifacts"); await mkdir(artifacts, { recursive: true });
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -59,7 +60,34 @@ try {
   await call("Emulation.setDeviceMetricsOverride", { width:1280,height:720, deviceScaleFactor: 1, mobile: false });
   await call("Page.navigate", { url: "http://127.0.0.1:3996" });
   await wait("document.getElementById('menu-status')?.textContent.includes('ONLINE')"); await capture("menu");
-  if(process.argv.includes('--gear-only')){
+  if(process.argv.includes('--baseline-only')){
+    await evaluate("document.getElementById('menu-options').click();document.getElementById('opt-quality').value='low';document.getElementById('opt-quality').dispatchEvent(new Event('change'));document.getElementById('options-close').click()");
+    const sizes=[[1280,720],[520,640]];
+    async function views(name){for(const [width,height] of sizes){await call('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:1,mobile:false});await capture(`presentation-baseline-${name}-${width}`);if(await evaluate('document.documentElement.scrollWidth')>width)throw Error('Horizontal overflow in '+name);if(await evaluate("(()=>{const input=document.getElementById('chat-input');if(input.classList.contains('hidden'))return false;const a=input.getBoundingClientRect(),b=document.getElementById('chat').getBoundingClientRect();return a.top<b.top||a.bottom>b.bottom+1;})()"))throw Error('Radio input clipped in '+name);if(!['menu','lobby'].includes(name)&&await evaluate("(()=>{const a=document.getElementById('chat').getBoundingClientRect(),m=document.querySelector('.meters'),b=m.getBoundingClientRect();return getComputedStyle(m).display!=='none'&&getComputedStyle(document.getElementById('chat')).visibility!=='hidden'&&a.height>0&&a.left<b.right&&a.right>b.left&&a.top<b.bottom&&a.bottom>b.top;})()"))throw Error('Radio text overlaps vital meters in '+name);}}
+    await views('menu');await evaluate("document.getElementById('player-name').value='Mara';document.getElementById('create-room').click()");await wait("!document.getElementById('lobby').classList.contains('hidden')");
+    const room=[...api.rooms.values()][0];
+    for(let i=1;i<8;i++){const bot=connect('http://127.0.0.1:3996',{transports:['websocket'],forceNew:true});bots.push(bot);await new Promise(r=>bot.once('connect',r));const joined=new Promise(r=>bot.once('room:joined',r));bot.emit('room:join',{name:`Crew ${i}`,code:room.code});await joined;bot.emit('lobby:dept',{dept:['engineering','command','medical','eva'][i%4]});bot.emit('lobby:ready',{ready:true});}
+    await evaluate("document.getElementById('dept-cards').children[0].click();document.getElementById('ready-button').click()");await sleep(300);await views('lobby');
+    await call('Emulation.setDeviceMetricsOverride',{width:1280,height:720,deviceScaleFactor:1,mobile:false});await evaluate("document.getElementById('start-button').click()");await wait("!document.getElementById('game').classList.contains('hidden')");await capture('presentation-baseline-intro-1280');
+    room.briefingEndsAt=Date.now();for(let i=0;i<120&&room.phase!=='playing';i++)await sleep(50);if(room.phase!=='playing')throw Error('Baseline match did not start');room.phase='visual-fixture';
+    const game=room.game,p=room.matchPlayers[0];game.nextBreachAt=game.lockdown.nextAt=1e9;
+    async function state(name,{x=p.x,z=p.z,yaw=0,ext=false}={}){Object.assign(p,{x,z,rotation:yaw,exterior:ext,depth:0});io.to(p.socketId).emit('player:correct',{x,z,rotation:yaw,teleport:true});io.to(room.code).emit('game:state',snapshotGame(game,room.matchPlayers,Date.now()));await views(name);}
+    await state('station-dark',{yaw:p.rotation});for(const task of Object.values(game.tasks))task.done=true;game.tasks.launch.done=false;
+    await state('station-powered',{x:6,z:-6});
+    Object.assign(game.lev,{state:'approach',angle:Math.atan2(-2.6,14),dist:Math.hypot(14,2.6),threat:75});
+    await state('hull-contact',{x:8,z:-2.6,yaw:-Math.PI/2});
+    Object.assign(game.lev,{state:'patrol',angle:Math.PI,dist:40,threat:15});
+    await state('vent-garden',{x:-32,z:14,yaw:Math.atan2(6,8.5),ext:true});
+    await state('wreck',{x:28,z:18,yaw:Math.atan2(-10,18),ext:true});
+    game.rooms.engineering.flood=2;p.submerged=true;p.breath=5;game.breaches.push({id:'breach:baseline',room:'engineering',x:6,z:-6,since:game.time-100});
+    await state('flood-warning',{x:6,z:-4});game.rooms.engineering.flood=0;game.breaches=[];p.submerged=false;p.breath=12;
+    room.matchPlayers.forEach((q,i)=>{q.aboard=i<game.seats;q.exterior=false;});beginFinale(game,room.matchPlayers,[]);const pod=game.finale.pod;
+    Object.assign(pod,{progress:55,lane:0,hull:75,oxygen:60,charges:0,creatureDistance:7});await state('pod-attack');
+    await evaluate("document.activeElement?.blur()");await tap('Enter');await wait("!document.getElementById('chat-input').classList.contains('hidden')");await views('pod-radio');await evaluate("document.getElementById('chat-input').dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',code:'Escape',bubbles:true}))");
+    Object.assign(pod,{phase:'rendezvous',progress:210,speed:0,dockProgress:.5});await state('docking');
+    Object.assign(pod,{phase:'sealing',dockProgress:1,sealSince:game.time-1.2});await state('shutter');
+    Object.assign(pod,{phase:'ascent',ascentSince:game.time-6});await state('lift');
+  }else if(process.argv.includes('--gear-only')){
     await evaluate("document.getElementById('player-name').value='Mara';document.getElementById('practice-start').click()");await wait("document.getElementById('mission-chapter').textContent.includes('SIMULATOR')");
     const r=[...api.rooms.values()][0];for(let i=0;i<120&&r.phase!=='playing';i++)await sleep(50);await sleep(200);r.phase='visual-fixture';r.game.practice=null;
     const p=r.matchPlayers[0];Object.assign(p,{x:6,z:-8});const dropError=dropItem(r.game,r.matchPlayers,p,0);if(dropError)throw Error(dropError);p.z=-6.6;
