@@ -12,6 +12,7 @@ export function createExplorationView(scene,surfaces={}){
     metal:new THREE.MeshStandardMaterial({color:0x52666b,roughness:.8,metalness:.6}),
     rust:new THREE.MeshStandardMaterial({color:0x826348,roughness:.9,metalness:.4,map:surfaces.metal?.clone()||null,normalMap:maps.normalMap}),
     glow:new THREE.MeshStandardMaterial({color:0xbad4c5,emissive:0x73978b,emissiveIntensity:.7}),
+    routeLamp:new THREE.MeshStandardMaterial({color:0xbef5ed,emissive:0x75ddd0,emissiveIntensity:1.55}),
     fan:new THREE.MeshStandardMaterial({color:0x887f6a,roughness:1,side:THREE.DoubleSide}),
     net:new THREE.MeshBasicMaterial({color:0x809d9e,transparent:true,opacity:.24})};
   const groups=new Map(),transform=new THREE.Object3D();
@@ -72,7 +73,7 @@ export function createExplorationView(scene,surfaces={}){
         const t=i/steps,x=a[0]+(b[0]-a[0])*t,z=a[1]+(b[1]-a[1])*t;
         // Mark beside the swimming line, never across it.
         const sideX=(b[1]-a[1])/distance*.8,sideZ=-(b[0]-a[0])/distance*.8;
-        const floor=oceanHeight(x+sideX,z+sideZ);cylinder(.045,1.6-floor,x+sideX,(floor+1.6)/2,z+sideZ);cylinder(.07,.22,x+sideX,1.4,z+sideZ,'glow');
+        const floor=oceanHeight(x+sideX,z+sideZ);cylinder(.045,1.6-floor,x+sideX,(floor+1.6)/2,z+sideZ);cylinder(.095,.28,x+sideX,1.4,z+sideZ,'routeLamp');
         // Protective foot and a second reflective band make the route readable from below.
         cylinder(.16,.12,x+sideX,floor+.06,z+sideZ);
         cylinder(.055,.10,x+sideX,.45,z+sideZ,'glow');

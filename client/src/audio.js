@@ -195,6 +195,11 @@ export const sfx={
   },
   podBoost:()=>cue("podBoost","[POD THRUSTERS SURGING]"),podPass:()=>cue("podPass","[WRECKAGE RUSHES PAST]"),
   flashlight:()=>cue("flashlight"),holdStart:()=>cue("holdStart"),holdCancel:()=>cue("holdCancel"),done:()=>cue("done"),
+  repairComplete(kind) {
+    play('holdStart', null, .42, kind === 'patched' ? .8 : 1.15);
+    play('done', null, .85, kind === 'refill' ? 1.18 : 1);
+    caption(kind === 'patched' ? '[HULL PATCH SEALED]' : kind === 'refill' ? '[OXYGEN RESERVE DISCHARGED]' : '[REPAIR COMPLETE]');
+  },
   impact:position=>cue("impact",`[THE LEVIATHAN SLAMS INTO THE HULL${direction(position).toUpperCase()}]`,position),
   collision:()=>cue("collision","[WRECKAGE STRIKES THE POD HULL]"),launch:()=>cue("launch","[EVACUATION SIGNAL / BOARD THE TRANSFER POD]"),
   collapse:lane=>cue('hullGroan',`[STRUCTURAL FAILURE ${lane} / MOVE TO A CLEAR LANE]`),

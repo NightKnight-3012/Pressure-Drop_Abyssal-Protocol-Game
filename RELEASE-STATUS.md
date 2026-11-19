@@ -34,6 +34,8 @@ The gameplay-integrity follow-up adds collision-aware EVA simulator modes and si
 
 ## Required release checks
 
+For the combined playtest, start with the solo recovery drill on the laptop you normally use. Then run a five-player match and a seven- or eight-player match if possible. Record when the first diver goes down, whether the contact warning gave them time to react, how many crew are conscious at launch, and who reaches extraction by each route. Have an extracted player follow an active survivor and radio their location. Review the final crew report against what happened in the match. Watch for sustained stutter during flooding, close encounters and docking.
+
 - Fresh human tests at 1, 3-4 and 8 players: warning clarity, individual survival, useful role/passenger jobs, exploration risk/reward and survivor choices.
 - Hardware performance measurements. Software WebGL screenshots do not establish 60 FPS.
 - Actual Docker build/container deployment verification; Docker was unavailable during development. Local production entry/restart has automated coverage.

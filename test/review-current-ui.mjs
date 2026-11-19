@@ -39,6 +39,7 @@ try {
     const msg = JSON.parse(e.data);
     if (msg.id && pending.has(msg.id)) { const { resolve, reject } = pending.get(msg.id); pending.delete(msg.id); msg.error ? reject(Error(JSON.stringify(msg.error))) : resolve(msg.result); }
     if (msg.method === "Runtime.exceptionThrown") errors.push(msg.params.exceptionDetails.exception?.description || msg.params.exceptionDetails.text);
+    if (msg.method === 'Runtime.consoleAPICalled' && msg.params.args.some(arg => /Optional lighting effects unavailable|Closed optional bloom pass/.test(arg.value || ''))) errors.push('Optional HDR rendering fell back unexpectedly');
   });
   const call = (method, params = {}) => new Promise((resolve, reject) => {
     const id = ++seq, timer = setTimeout(() => { pending.delete(id); reject(Error(`Browser command timed out: ${method}`)); }, method === "Page.captureScreenshot" ? 60000 : 30000);
@@ -73,7 +74,20 @@ try {
     const game=room.game,p=room.matchPlayers[0];game.nextBreachAt=game.lockdown.nextAt=1e9;
     async function state(name,{x=p.x,z=p.z,yaw=0,ext=false}={}){Object.assign(p,{x,z,rotation:yaw,exterior:ext,depth:0});io.to(p.socketId).emit('player:correct',{x,z,rotation:yaw,teleport:true});io.to(room.code).emit('game:state',snapshotGame(game,room.matchPlayers,Date.now()));await views(name);}
     await state('station-dark',{yaw:p.rotation});for(const task of Object.values(game.tasks))task.done=true;game.tasks.launch.done=false;
-    await state('station-powered',{x:6,z:-6});
+    await state('station-powered',{x:6,z:-6,yaw:-Math.PI/2});
+    await call('Emulation.setDeviceMetricsOverride',{width:1280,height:720,deviceScaleFactor:1,mobile:false});
+    const quality = value => evaluate(`document.getElementById('opt-quality').value='${value}';document.getElementById('opt-quality').dispatchEvent(new Event('change'))`);
+    const reduced = enabled => evaluate(`(()=>{const box=document.getElementById('opt-reduced');if(box.checked!==${enabled})box.click();})()`);
+    await reduced(false);
+    await quality('balanced');
+    await wait("performance.getEntriesByType('resource').some(entry=>entry.name.includes('/world-finish-'))");
+    p.hp=21;io.to(room.code).emit('game:state',snapshotGame(game,room.matchPlayers,Date.now()));
+    await wait("document.getElementById('suit-edge').classList.contains('visible')");
+    await capture('presentation-lighting-engineering-balanced');
+    await reduced(true);
+    await wait("!document.getElementById('suit-edge').classList.contains('visible')");
+    await capture('presentation-lighting-engineering-reduced');
+    await quality('low');await reduced(false);p.hp=100;
     Object.assign(game.lev,{state:'approach',angle:Math.atan2(-2.6,14),dist:Math.hypot(14,2.6),threat:75});
     await state('hull-contact',{x:8,z:-2.6,yaw:-Math.PI/2});
     Object.assign(game.lev,{state:'patrol',angle:Math.PI,dist:40,threat:15});
@@ -87,6 +101,21 @@ try {
     Object.assign(pod,{phase:'rendezvous',progress:210,speed:0,dockProgress:.5});await state('docking');
     Object.assign(pod,{phase:'sealing',dockProgress:1,sealSince:game.time-1.2});await state('shutter');
     Object.assign(pod,{phase:'ascent',ascentSince:game.time-6});await state('lift');
+    p.escaped=true;
+    room.matchPlayers.slice(1).forEach((q,i)=>{q.escaped=q.aboard;if(!q.escaped)Object.assign(q,{x:6,z:-5-i*.2});});
+    io.to(room.code).emit('game:state',snapshotGame(game,room.matchPlayers,Date.now()));
+    await wait("document.getElementById('spectate-detail').textContent.includes('Station')");
+    await views('spectator');
+    const spectatorOverlap = await evaluate("(()=>{const p=document.getElementById('spectate').getBoundingClientRect(),c=document.getElementById('chat').getBoundingClientRect();return getComputedStyle(document.querySelector('.meters')).display!=='none'||(p.left<c.right&&p.right>c.left&&p.top<c.bottom&&p.bottom>c.top);})()");
+    if(spectatorOverlap)throw Error('Spectator panel overlaps suit or radio controls');
+    for(const q of room.matchPlayers){q.contribution=12;q.stats.revives=2;}
+    io.to(room.code).emit('game:over',buildSummary(game,room.matchPlayers,'win','The recovery tender received the pod.'));
+    await wait("document.body.classList.contains('in-epilogue')");
+    await evaluate("document.getElementById('epilogue-skip').click()");
+    await wait("document.getElementById('over-table').textContent.includes('2 revives')");
+    await views('debrief');
+    const clipped = await evaluate("(()=>{const table=document.getElementById('over-table').getBoundingClientRect();return table.left<0||table.right>innerWidth;})()");
+    if(clipped)throw Error('Debrief table exceeds small viewport');
   }else if(process.argv.includes('--gear-only')){
     await evaluate("document.getElementById('player-name').value='Mara';document.getElementById('practice-start').click()");await wait("document.getElementById('mission-chapter').textContent.includes('SIMULATOR')");
     const r=[...api.rooms.values()][0];for(let i=0;i<120&&r.phase!=='playing';i++)await sleep(50);await sleep(200);r.phase='visual-fixture';r.game.practice=null;

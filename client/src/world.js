@@ -198,6 +198,10 @@ export function buildWorld(scene) {
       if (id === "power") {
         body.visible = false;group.add(createPowerUnit(screenMat, surfaces.hazard));
         screen.scale.set(.48,.65,1);screen.position.set(0,1.25,.28);
+        const grounding = new THREE.Mesh(new THREE.PlaneGeometry(1.7, 1.15), new THREE.MeshBasicMaterial({map:glow,color:0x030608,transparent:true,opacity:.62,depthWrite:false}));
+        grounding.rotation.x = -Math.PI / 2;
+        grounding.position.set(0, .019, .3);
+        group.add(grounding);
       } else if (!small && def.kind !== "airlock") {
         const modelId = id === "power" || id === "o2" ? "battery" : id === "pump" || id === "lifesupport" ? "pipes" : "computer";
         // Keep equipment inside the original panel footprint and retain its status display.
@@ -271,7 +275,8 @@ export function buildWorld(scene) {
     const fixture = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.08, 0.38), fixtureMat);
     fixture.position.set(x, 3.95, z);
     scene.add(fixture);
-    return { light, fixtureMat, baseColor: color, flickerUntil: 0 };
+    const room = ROOM_IDS.find(id => ROOMS[id].sx === Math.sign(x) && ROOMS[id].sz === Math.sign(z));
+    return { light, fixtureMat, room, baseColor: color, flickerUntil: 0 };
   });
   let power = false;
   const alertColor = new THREE.Color(0xff2a1a);
@@ -282,13 +287,20 @@ export function buildWorld(scene) {
     for (const l of lights) {
       if (now > l.flickerUntil && Math.random() < chance) l.flickerUntil = now + 50 + Math.random() * 160;
       const flickering = !reduced && now < l.flickerUntil;
-      l.light.intensity = (power ? 14 : 6.5) * (flickering ? 0.65 : 1 - t * 0.18);
-      const room=ROOM_IDS.find(r=>ROOMS[r].sx===Math.sign(l.light.position.x)&&ROOMS[r].sz===Math.sign(l.light.position.z));
+      const brightness = l.room === 'engineering' ? (power ? 17 : 8) : (power ? 14 : 6.5);
+      l.light.intensity = brightness * (flickering ? 0.65 : 1 - t * 0.18);
+      const room = l.room;
       const isolated=room&&(state.roomCircuits?.[room]===false||state.empRooms?.[room]>state.t);
       if(isolated)l.light.intensity=.5;
       l.fixtureMat.emissiveIntensity = flickering ? 0.5 : power ? 1.4 : 0.8;
       if(isolated)l.fixtureMat.emissiveIntensity=.05;
       tmpColor.setHex(power ? l.baseColor : 0xd09862);
+      const flood = state.rooms[room]?.flood ?? 0;
+      const floodAlert = THREE.MathUtils.smoothstep(flood, .6, 1.8);
+      if (!isolated) {
+        l.light.intensity *= 1 - floodAlert * .18;
+        tmpColor.lerp(alertColor, floodAlert * .72);
+      }
       if (alert > 0) tmpColor.lerp(alertColor, reduced ? alert * 0.65 : alert * (0.5 + 0.5 * Math.sin(now / 260)));
       l.light.color.copy(tmpColor); l.fixtureMat.color.copy(tmpColor); l.fixtureMat.emissive.copy(tmpColor);
     }
@@ -321,8 +333,19 @@ export function buildWorld(scene) {
   const ringGeo = new THREE.RingGeometry(0.35, 0.5, 20);
   const ringMat = new THREE.MeshBasicMaterial({ color: 0xff5364, side: THREE.DoubleSide });
   const breaches = new Map();
+  const sprayPositions = new Float32Array(8 * 12 * 3);
+  const sprayGeometry = new THREE.BufferGeometry();
+  const sprayAttribute = new THREE.BufferAttribute(sprayPositions, 3).setUsage(THREE.DynamicDrawUsage);
+  sprayGeometry.setAttribute('position', sprayAttribute);
+  sprayGeometry.setDrawRange(0, 0);
+  const spray = new THREE.Points(sprayGeometry, new THREE.PointsMaterial({color:0xa9dce9,map:glow,size:.12,transparent:true,opacity:.62,depthWrite:false}));
+  spray.frustumCulled = false;
+  scene.add(spray);
+
   function syncBreaches(list, t, reduced) {
     const seen = new Set();
+    const droplets = reduced ? 0 : Math.ceil(12 * QUALITY[options.quality].particles);
+    let count = 0;
     for (const b of list) {
       seen.add(b.id);
       let v = breaches.get(b.id);
@@ -339,11 +362,20 @@ export function buildWorld(scene) {
         breaches.set(b.id, v);
       }
       v.sprite.material.opacity = reduced ? 0.5 : 0.5 + Math.sin(t * 3 + v.seed) * 0.1;
+      const room = ROOMS[b.room];
+      if (!room || count + droplets > sprayAttribute.count) continue;
+      for (let i = 0; i < droplets; i++) {
+        const age = (t * 1.7 + i / droplets + v.seed) % 1;
+        const fan = Math.sin(i * 7.31) * age * .48;
+        sprayAttribute.setXYZ(count++, b.x - room.sx * age * .66 + fan, .24 + .92 * age * (1 - age), b.z - room.sz * age * .66 - fan);
+      }
     }
     for (const [id, v] of breaches) {
       if (seen.has(id)) continue;
       scene.remove(v.group); v.sprite.material.dispose(); breaches.delete(id);
     }
+    sprayGeometry.setDrawRange(0, count);
+    if (count) sprayAttribute.needsUpdate = true;
   }
 
   // ================================================================ the ocean outside + the Leviathan

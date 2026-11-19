@@ -221,6 +221,9 @@ export function createHud() {
     // Called every frame. ctx: { me, zone, depth, stamina, winded }
     update(state, ctx) {
       const { me, zone, depth, stamina, winded } = ctx;
+      const lowAir = me?.ext ? me.suit < 22 : me?.submerged ? me.breath <= 6 : state.oxygen < 20;
+      const edge = !!me && !me.aboard && !me.subSeat && !me.lost && !me.escaped && !me.down && (lowAir || me.hp < 25);
+      setClass($('suit-edge'), 'visible', edge && options.quality !== 'low' && !options.reduced);
       const gearHidden = !me || me.down || me.lost || me.escaped || me.aboard || !!me.subSeat || state.stage === 'finale';
       const choosingGear=document.body.classList.contains('wrist-open');
       setClass($('gear'), 'hidden', gearHidden);
@@ -230,7 +233,13 @@ export function createHud() {
         gearButtons.forEach((b, i) => {
           const id = me?.inventory?.[i], def = ITEMS[id];
           const cooldown = Math.max(me?.itemReadyIn || 0, id === 'decoy' ? state.lureReadyIn || 0 : id === 'scanner' ? state.scanReadyIn || 0 : 0);
-          b.textContent = `${i + 1} ${def ? def.symbol + ' ' + def.label + (cooldown ? ` / ${cooldown}s` : ' ×1') : 'Spent'}`;
+          const key = document.createElement('kbd');
+          key.textContent = i + 1;
+          const icon = document.createElement('span');
+          icon.className = 'gear-icon';
+          icon.setAttribute('aria-hidden', 'true');
+          icon.textContent = def?.symbol ?? '–';
+          b.replaceChildren(key, ' ', icon, ` ${def ? def.label + (cooldown ? ` / ${cooldown}s` : ' ×1') : 'Spent'}`);
           b.title = choosingGear?'Select this slot to put it down':def?.help || 'Used this match'; b.disabled = !def || !choosingGear&&cooldown > 0;
           b.setAttribute('aria-label', `${choosingGear?'Select slot ':''}${i + 1}: ${def?.label || 'Spent'}. ${def?.help || ''}${cooldown ? ` Ready in ${cooldown}s.` : ''}`);
           b.setAttribute('aria-pressed', String(i === gearSelection));
@@ -365,14 +374,21 @@ export function createHud() {
     hideBriefing: () => el.briefing.classList.add("hidden"),
 
     // ---- down / spectate
-    showDown(secondsLeft) {
+    showDown(secondsLeft, exterior) {
       el.down.classList.remove("hidden");
-      setText(el.downText, `A teammate can revive you by holding their interaction key next to you. ${Number.isFinite(secondsLeft) ? `You will be lost in ${Math.max(0, Math.ceil(secondsLeft))}s.` : "Keep the rescue channel open."}`);
+      const instruction = exterior ? "Field revival is unavailable outside the station." : "A teammate can revive you by holding their interaction key next to you.";
+      setText(el.downText, `${instruction} ${Number.isFinite(secondsLeft) ? `You will be lost in ${Math.max(0, Math.ceil(secondsLeft))}s.` : "Keep the radio link open."}`);
     },
     hideDown: () => el.down.classList.add("hidden"),
-    setSpectate(name) {
-      setClass(el.spectate, "hidden", !name);
-      if (name) setText(el.spectateName, name.toUpperCase());
+    setSpectate(view) {
+      setClass(document.body, "following-crew", !!view);
+      setClass(el.spectate, "hidden", !view);
+      if (!view) return;
+      const {target, count, index, stage} = view;
+      setText(el.spectateName, target?.name.toUpperCase() ?? "");
+      const location = target?.aboard ? "Escape pod" : target?.subSeat ? "Survey sub" : target?.ext ? "Outside the hull" : "Station";
+      setText($("spectate-detail"), target ? `${index}/${count} · ${location}${target.down ? " · Incapacitated" : ""}` : "No connected crew to follow");
+      setText($("spectate-controls"), [count > 1 && "TAB Next crew member", target && stage !== "done" && "P Radio location"].filter(Boolean).join(" · "));
     },
 
     // ---- Command console overlay
@@ -450,13 +466,17 @@ export function createHud() {
       const win = o.result === "win";
       setText(el.overTitle, !win ? "ALL SIGNALS LOST" : o.grade === "full" ? "EVERYONE ESCAPED" : "SURVIVORS REACHED EXTRACTION");
       setText(el.overReason, o.reason+(o.storyEnding?` ${o.storyEnding.title}: ${o.storyEnding.text}`:''));
-      setText(el.overStats, `TIME ${fmtTime(o.seconds || 0)} · ${(o.escaped || o.aboard).length} ESCAPED · ${o.capsules?.length || 0} VIA CAPSULE · ${o.leftBehind.length} STAYED AT THE STATION`);
+      const escaped = (o.escaped || o.aboard).length;
+      const capsules = o.capsules?.length ?? 0;
+      setText(el.overStats, `TIME ${fmtTime(o.seconds || 0)} · ${escaped}/${o.startCount ?? o.crew.length} EXTRACTED · ${escaped - capsules} VIA POD · ${capsules} VIA CAPSULE`);
       const head = document.createElement("tr");
-      head.innerHTML = "<th>CREW</th><th>DEPARTMENT</th><th>CONTRIBUTIONS</th><th>FATE</th>";
+      head.innerHTML = "<th scope='col'>CREW</th><th scope='col'>DEPARTMENT</th><th scope='col'>FIELD RECORD</th><th scope='col'>FATE</th>";
       el.overTable.replaceChildren(head, ...o.crew.map((c) => {
         const tr = document.createElement("tr");
-        tr.className = "fate-" + c.fate.replace(" ", "-");
-        for (const text of [c.name, DEPTS[c.dept]?.label ?? "-", String(c.contribution || c.tasks), c.fate.toUpperCase()]) {
+        tr.className = "fate-" + c.fate.replaceAll(" ", "-");
+        const record = [`${c.contribution ?? c.tasks ?? 0} pts`, `${c.revives ?? 0} revives`];
+        if (Number.isFinite(c.survived)) record.push(`${fmtTime(c.survived)} active`);
+        for (const text of [c.name, DEPTS[c.dept]?.label ?? "-", record.join(" · "), c.fate.toUpperCase()]) {
           const td = document.createElement("td"); td.textContent = text; tr.appendChild(td);
         }
         return tr;

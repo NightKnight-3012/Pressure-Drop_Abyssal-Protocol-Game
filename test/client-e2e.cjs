@@ -353,10 +353,14 @@ const until = async (fn, ms = 6000) => { const t = Date.now(); while (Date.now()
   P[0].downed = true; P[0].hp = 0; P[0].downedAt = game.time - 41; await sleep(400);
   ok("being downed shows the down overlay", vis("down-overlay"));
   ok("the rescue countdown reflects server time instead of restarting locally", /in 1[0-9]s/.test(txt("down-text")), txt("down-text"));
+  P[0].exterior = true;
+  ok("exterior casualty overlay explains field revival limits", await until(() => /unavailable outside/.test(txt("down-text")), 1500));
+  P[0].exterior = false;
   P[0].lost = true; await sleep(400);
   ok("a lost player becomes a spectator", !$("spectate").classList.contains("hidden") && /spectator/i.test(txt("objective")), txt("objective"));
   key("keydown", "Tab"); key("keyup", "Tab"); await sleep(200);
   ok("spectator bar names a teammate to follow", txt("spectate-name").length > 0, txt("spectate-name"));
+  ok("spectator bar shows target position in the crew and clears the rescue overlay", /^\d\/3 · Station/.test(txt("spectate-detail")) && !vis("down-overlay"));
   P[0].lost = false; P[0].downed = false; P[0].hp = 100; await sleep(300);
   ok("overlay clears after recovering", !vis("down-overlay"));
 
@@ -438,6 +442,8 @@ const until = async (fn, ms = 6000) => { const t = Date.now(); while (Date.now()
   ok("the alignment panel shows the captured pod", vis("pod-docking") && /SHUTTER/.test(txt("pod-dock-stage")));
   ok("pod extraction leaves the survivor's game running", await until(() => P[0].escaped, 20000) && game.status === "playing" && !vis("game-over"));
   ok("settled crew can follow the station survivor", await until(() => /Med/i.test(txt("spectate-name")), 1500));
+  await tap("KeyP");
+  ok("extracted spectators can radio the location of the survivor they are watching", await until(() => /pings Med/i.test(txt("chat-log")), 1500));
   await sleep(100); const hiddenPodUpdates = w.__podUpdates, visibleStationUpdates = w.__stationUpdates;
   await sleep(350);
   ok("following the survivor pauses the hidden cockpit", w.__podUpdates === hiddenPodUpdates && w.__stationUpdates > visibleStationUpdates);
@@ -449,6 +455,7 @@ const until = async (fn, ms = 6000) => { const t = Date.now(); while (Date.now()
   ok("cinematic can be skipped to the crew report", vis("game-over") && !vis("epilogue"));
   ok("summary reports actual extraction", /SURVIVORS REACHED EXTRACTION/.test(txt("over-title")), txt("over-title"));
   ok("summary lists 4 crew with fates", $("over-table").querySelectorAll("tr").length === 5 && /LEFT BEHIND/.test(txt("over-table")), txt("over-table"));
+  ok("debrief shows server-recorded contribution, revives and extraction routes", /pts.*revives.*active/.test(txt("over-table")) && /3\/4 EXTRACTED.*3 VIA POD/.test(txt("over-stats")), txt("over-stats"));
   ok('mission timeline includes actual equipment use and filter servicing', /Flare ignited/.test(txt('timeline-entries')) && /Filter cleared/.test(txt('timeline-entries')));
   ok("the personal ending is saved in expedition records", JSON.parse(w.localStorage.getItem("pressure-drop-crew-log") || "[]").length === 1);
   for (const b of bots) b.s.emit("epilogue:done"); await sleep(200);

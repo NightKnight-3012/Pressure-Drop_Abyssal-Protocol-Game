@@ -404,11 +404,12 @@ export function attachGame(io, { timeScale = 1, log = console,repository=null,li
     });
 
     socket.on("spectate:ping", (data) => {
-      const c = ctx(); if (!c || c.room.phase !== "playing" || !c.p.lost || !isObject(data)) return;
+      const c = ctx(); if (!c || c.room.phase !== "playing" || !(c.p.lost || c.p.escaped) || !isObject(data)) return;
       if (!allow(c.p, "ping", 3000, Date.now())) return;
       const target = typeof data.targetId === "string" ? c.room.players.get(data.targetId) : null;
-      if (!target || target.lost) return;
-      sys(c.room, `[spectator ${c.p.name}] pings ${target.name} in the ${zoneLabel(target.x, target.z)}.`);
+      if (!target?.connected || target.lost || target.escaped) return;
+      const location = target.aboard ? "escape pod" : target.subSeat ? "survey sub" : target.exterior ? "water outside the hull" : zoneLabel(target.x, target.z);
+      sys(c.room, `[spectator ${c.p.name}] pings ${target.name} in the ${location}.`);
     });
 
     // ---------------- in-match messages ----------------

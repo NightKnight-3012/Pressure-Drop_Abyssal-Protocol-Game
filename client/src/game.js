@@ -137,6 +137,20 @@ export function startGame({ playerId, code, match, chat }) {
 
   G.unbindChat = bindChatInput(G.chatInput, closeChat);
   let lastQuality = options.quality;
+  const matchGame = G;
+  let loadingFinish = false;
+  const configureFinish = () => {
+    if (matchGame.finish) { matchGame.finish.configure(options); return; }
+    if (options.quality === 'low' || !renderer.extensions?.has('EXT_color_buffer_float') || loadingFinish) return;
+    loadingFinish = true;
+    import('./world-finish.js').then(({createWorldFinish}) => {
+      if (G !== matchGame) return;
+      if (options.quality === 'low') { loadingFinish = false; return; }
+      matchGame.finish = createWorldFinish(renderer, scene, camera);
+      matchGame.finish.configure(options);
+    }).catch(error => console.warn('Optional lighting effects unavailable:', error));
+  };
+  configureFinish();
   G.unbindOptions = onOptionsChange(() => {
     if (lastQuality !== options.quality) {
       lastQuality = options.quality;
@@ -145,6 +159,7 @@ export function startGame({ playerId, code, match, chat }) {
       renderer.setSize(window.innerWidth, window.innerHeight);
     }
     renderer.toneMappingExposure = options.brightness;
+    configureFinish();
   });
   document.getElementById("pause-resume").onclick = () => togglePause(false);
   document.getElementById("pause-options").onclick = showOptions;
@@ -185,6 +200,7 @@ export function stopGame() {
   document.getElementById("pod-hud").classList.add("hidden"); document.getElementById("finale-status").classList.add("hidden");
   G.world.dispose();
   G.workHands.dispose();
+  G.finish?.dispose();
   G.renderer.dispose();
   G.renderer.domElement.remove();
   setCaptionSink(null);
@@ -439,7 +455,8 @@ function closeChat() {
 }
 
 function spectateTargets() {
-  return G.state.players.filter((p) => !p.lost && !p.escaped && p.id !== G.playerId);
+  return G.state.players.filter((p) => p.conn && !p.lost && !p.escaped && p.id !== G.playerId)
+    .sort((a,b) => Number(a.down) - Number(b.down));
 }
 function onKey(code) {
   if (!G) return;
@@ -519,7 +536,21 @@ function frame() {
     if (!G.errored) { G.errored = true; console.error("Game loop error:", e); G.hud.toast("Display error (see console). The game is still running."); }
   }
   if (!G.epilogue && G.viewPod && G.podView) G.podView.render(G.renderer);
-  else G.renderer.render(G.epilogue ? G.epilogue.scene : G.scene, G.epilogue ? G.epilogue.camera : G.camera);
+  else if (G.epilogue) G.renderer.render(G.epilogue.scene, G.epilogue.camera);
+  else {
+    let rendered = false;
+    if (G.phase === 'playing' && G.finish) {
+      try { rendered = G.finish.render(options); }
+      catch (error) {
+        G.finish.dispose();
+        G.finish = null;
+        G.renderer.setRenderTarget(null);
+        G.renderer.autoClear = true;
+        console.warn('Closed optional bloom pass:', error);
+      }
+    }
+    if (!rendered) G.renderer.render(G.scene, G.camera);
+  }
   if(!G.epilogue&&!G.viewPod)G.workHands.render(G.renderer,G.camera.aspect);
 }
 
@@ -580,7 +611,7 @@ function step() {
     if (!list.some((p) => p.id === G.spectateId)) G.spectateId = list[0]?.id ?? null;
     const r = G.spectateId ? G.remotes.get(G.spectateId) : null;
     const target = state.players.find(p => p.id === G.spectateId);
-    hud.setSpectate(target?.name || "(nobody left)");
+    hud.setSpectate({target: list.find(p => p.id === target?.id), count: list.length, index: list.indexOf(target) + 1, stage: state.stage});
     if(target?.subSeat){cx=state.sub.x;cz=state.sub.z;eye=SUB_TUNING.eye;yaw=state.sub.yaw;pitch=0;}
     else if (r) { cx = r.group.position.x; cz = r.group.position.z; yaw = r.group.rotation.y; pitch = 0; eye = (r.down ? DOWNED_EYE_HEIGHT : EYE_HEIGHT)-(target?.depth||0); }
     else { cx = 0; cz = 0; eye = 6; pitch = -0.6; }
@@ -603,7 +634,7 @@ function step() {
     G.shake = Math.max(0, G.shake - dt * 2.4);
     if (!reduced) { camera.position.x += (Math.random() - 0.5) * G.shake * 0.22; camera.position.y += (Math.random() - 0.5) * G.shake * 0.18; }
   }
-  if (G.flash > 0) { G.flash = Math.max(0, G.flash - dt * 1.8); hud.setFlash(reduced ? G.flash * 0.3 : G.flash); }
+  if (G.flash > 0) { G.flash = Math.max(0, G.flash - dt * 1.8); hud.setFlash(reduced ? 0 : G.flash); }
 
   if (!me?.aboard || me.lost || me.escaped) G.remotes.update(dt, camera.position, me?.lost || me?.escaped ? G.spectateId : null, camera);
   const following = state.players.find(p => p.id === G.spectateId);
@@ -617,12 +648,14 @@ function step() {
 
   // ---- environment
   const viewer = me?.lost || me?.escaped ? { x: cx, z: cz } : G.player;
-  const outside = roomAt(viewer.x, viewer.z) === "exterior";
-  const depthShade=1/(1+(me?.depth||0)*.12);
+  const watched = me?.lost || me?.escaped ? following : me;
+  const outside = watched?.ext ?? (roomAt(viewer.x, viewer.z) === "exterior");
+  const depthShade=1/(1+(watched?.depth||0)*.12);
+  const flashlightOn = me?.lost || me?.escaped ? !!watched?.flashlight : G.flashOn;
   G.fill.intensity=outside ? .85*depthShade : .45;
   const region=exteriorZone(viewer.x,viewer.z);
   G.flashlight.distance = outside ? region.lamp*depthShade : 17;
-  G.flashlight.intensity = G.flashOn ? G.FLASH_ON * (outside ? 1.4 : 1) : 0;
+  G.flashlight.intensity = flashlightOn ? G.FLASH_ON * (outside ? 1.4 : 1) : 0;
   const depth = depthAt(state, viewer.x, viewer.z);
   const under = !G.viewPod && !outside && depth > eye - 0.1;
   setAudioEnvironment({active:!G.connectionLost && !G.over,outside:outside && !G.viewPod,underwater:under,pod:G.viewPod,surface:false});
@@ -634,7 +667,7 @@ function step() {
   hud.setUnderwater(under && !reduced);
   const holdIds = new Set(Object.values(state.holds).map((h) => h.id));
   const alert = state.lockdown.active || state.stage === "boarding" ? 1 : state.oxygen < 15 ? 0.6 : 0;
-  if (!G.viewPod) G.world.update(state, { dt, time, now, reducedEffects: reduced, holdIds, alert, viewer: camera.position, camera, flashlightOn:G.flashOn,selfId:G.playerId });
+  if (!G.viewPod) G.world.update(state, { dt, time, now, reducedEffects: reduced, holdIds, alert, viewer: camera.position, camera, flashlightOn,selfId:watched?.id ?? G.playerId });
   if (G.repairId && Math.hypot(G.player.x - STATIONS[G.repairId].x, G.player.z - STATIONS[G.repairId].z) > REPAIR_RANGE + 0.3) closeRepair();
 
   // ---- warnings
@@ -681,8 +714,8 @@ function step() {
     if(!me || me.ext || me.down || me.lost || me.aboard || me.escaped || state.stage!=='main' || G.paused || G.connectionLost || Math.hypot(G.player.x-point.x,G.player.z-point.z)>LOCKER_RANGE || G.player.z<point.z)closeLocker();
     else G.locker.update(state,me);
   }
-  if (me?.down) {
-    hud.showDown(me.downIn);
+  if (me?.down && !me.lost && !me.escaped) {
+    hud.showDown(me.downIn, me.ext);
   } else hud.hideDown();
 
   // ---- left behind notice
@@ -780,8 +813,8 @@ export function handleEvent(e) {
     }
     case "podClamped": sfx.door(); G.hud.toast("CLAMPS ENGAGED / SHUTTER CLOSING ASTERN"); break;
     case "podSecured": sfx.done(); G.hud.toast("RECOVERY CRADLE LOCKED / SHUTTER SEALED"); break;
-    case "task": sfx.done(); G.hud.toast(`${e.label.toUpperCase()} REPAIRED BY ${e.by.toUpperCase()}`); break;
-    case "patched": case "refill": sfx.done(); break;
+    case "task": sfx.repairComplete(e.type); G.hud.toast(`${e.label.toUpperCase()} REPAIRED BY ${e.by.toUpperCase()}`); break;
+    case "patched": case "refill": sfx.repairComplete(e.type); break;
     case "breach": sfx.breach({ x: ROOMS[e.room].sx * 6, z: ROOMS[e.room].sz * 6 }); G.hud.toast(`HULL BREACH IN THE ${ROOMS[e.room].label.toUpperCase()}`); break;
     case "lev":
       if (e.state === "investigate") sfx.creature({ x: Math.cos(G.state.lev.angle) * G.state.lev.dist, z: Math.sin(G.state.lev.angle) * G.state.lev.dist });
@@ -811,7 +844,7 @@ export function handleEvent(e) {
     case "pilotChanged": G.hud.toast(`${G.state.players.find(p => p.id === e.id)?.name || "A CREW MEMBER"} NOW HAS THE CONTROLS`); break;
     case "podCollision": sfx.collision(); G.hud.toast("WRECKAGE IMPACT · REPAIR AND KEEP MOVING"); break;
     case 'podCollapse': if(G.viewPod)sfx.collapse(['LEFT','CENTRE','RIGHT'][e.lane+1]);break;
-    case "podStrike": sfx.impact(); G.hud.toast("POD HULL DAMAGE · REPAIR AND KEEP MOVING"); break;
+    case "podStrike": if (G.viewPod) { sfx.impact(); G.hud.toast("POD HULL DAMAGE · REPAIR AND KEEP MOVING"); } break;
     case "podRepair": case "capsuleRepair": sfx.done(); break;
     case "pursuit": sfx.creature(); G.hud.toast(`CONTACT TURNING TOWARD THE ${e.target.toUpperCase()}`); break;
     case "capsuleEscape": case "podOutcome": G.hud.toast("ROUTE RESOLVED · REMAINING CREW ARE STILL PLAYING"); break;

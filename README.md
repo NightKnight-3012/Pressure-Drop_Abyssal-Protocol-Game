@@ -457,6 +457,10 @@ The final balance audit also reports actual lost players, average escaped crew a
 
 ### Release audit diagnostics
 
+Settled players can follow connected crewmates with Tab and radio the watched player's location with P. The spectator panel identifies whether the camera is following someone in the station, outside the hull, in the survey sub, or aboard the escape pod. The mission debrief lists extraction routes and reports each player's contribution points, revives and time before extraction or loss. Flooded compartments gradually take on a steady red tint, with the water level and suit warnings providing separate cues.
+
+Balanced and High add subtle metal reflections and thresholded bloom to the station and exterior on browsers with HDR render-target support. Low uses direct rendering. Reduced effects disables bloom, spray motion, the suit edge effect, and damage flashes. The pod and epilogue use their dedicated render paths. The Brightness slider works in both render paths. Compare presets in Display & Controls using the measured frame time, especially during flooding and an exterior retreat.
+
 `npm run audit:eva-travel -- 60` compares the original delayed-arrival simulator with continuous emergency retreat and continuous exterior travel over matching seeds. These optional modes use swim speed and swept exterior collision; indoor travel and the finale driver remain approximations. `npm run test:exterior-travel` checks all required airlock/junction routes, reaction time, speed limits and blocked paths. The default balance mode remains unchanged; PowerShell users can select a diagnostic mode with `$env:EVA_TRAVEL="continuous"` and remove it afterward.
 
 Incapacitated divers now receive an accurate exterior emergency instruction. A diver already down outside when the pod launches receives a casualty epilogue rather than a voluntary-sacrifice story. These changes do not alter damage, revival permissions or escape capacity.

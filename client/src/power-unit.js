@@ -6,8 +6,8 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 export function createPowerUnit(statusMaterial, hazardMap) {
   const root=new THREE.Group();root.name='NEREID / power distribution assembly';
   const finishes=[
-    new THREE.MeshStandardMaterial({color:0x344b50,metalness:.65,roughness:.55}),
-    new THREE.MeshStandardMaterial({color:0x9a7955,metalness:.7,roughness:.48}),
+    new THREE.MeshStandardMaterial({color:0x53666a,metalness:.58,roughness:.57}),
+    new THREE.MeshStandardMaterial({color:0xbd925f,metalness:.55,roughness:.48}),
     new THREE.MeshStandardMaterial({color:0xb8b5a2,metalness:.35,roughness:.64,map:hazardMap}),
     statusMaterial
   ],batches=finishes.map(()=>[]);

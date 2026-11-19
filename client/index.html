@@ -80,6 +80,7 @@
     <div id="game-hud">
       <div id="underwater"></div>
       <div id="damage-flash" class="damage-flash"></div>
+      <div id="suit-edge" class="suit-edge" aria-hidden="true"></div>
       <div id="down-overlay" class="down-overlay hidden"><b>YOU ARE DOWN</b><span id="down-text">A teammate can revive you. Hold on.</span></div>
 
       <div class="hud-top">
@@ -124,12 +125,12 @@
       </div>
       <div id="toast" class="toast hidden"></div>
 
-      <div id="spectate" class="spectate hidden">
-        <b>SPECTATING <span id="spectate-name"></span></b>
-        <small>TAB: next crew member &nbsp; P: ping their location</small>
-      </div>
-
       <div class="hud-bottom">
+        <div id="spectate" class="spectate hidden">
+          <b>SPECTATING <span id="spectate-name"></span></b>
+          <small id="spectate-detail"></small>
+          <small id="spectate-controls"></small>
+        </div>
       <div id="chat" class="chat">
         <div id="chat-log" class="chat-log"></div>
         <input id="chat-input" class="chat-input hidden" maxlength="120" placeholder="Message crew (Enter to send, Esc to cancel)" autocomplete="off">

@@ -94,3 +94,5 @@ Dropped equipment reuses the original procedural emergency-canister geometry, si
 The three authored collapse sections in client/src/collapse-section.js are original procedural lift/wreck/conduit geometry, merged into two material draws per section. They reuse the pod's metal/hazard materials and the original hull-groan recording with lane-specific captions. No downloaded assets, added lights, paid services or new licences.
 
 Articulated fingers, opposable thumbs, two-bone arm rig, lower work stance and offset wrench head are original procedural geometry/animation in client/src/hand-rig.js and work-hands.js. The 28 finger segments share one instanced draw; four sleeve segments share another. Contact queries use existing equipment geometry, with no imported rigs, paid services, new recordings or new licences.
+
+The lighting finish generates a reflection map locally using Three.js's bundled RoomEnvironment. Equipment contact shading and breach spray reuse the original procedural radial texture. Survey lamps use original geometry, and repair confirmation layers existing local sounds. No new downloaded media or external services are used.

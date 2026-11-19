@@ -982,7 +982,7 @@ export function buildSummary(game, players, result, reason) {
       id: p.id, name: p.name, dept: p.dept, tasks: p.tasksDone, contribution: p.contribution || 0, volunteered: p.volunteered,
       downs:p.stats?.downs||0,revives:p.stats?.revives||0,survived:Math.round(Math.min(game.time,p.escapedAt??p.lostAt??game.time)),escaped:game.finale?!!p.escaped:!!p.aboard,
       ending: p.ending || (p.lost ? "lost" : "stranded"),
-      fate: p.escaped ? p.aboard ? "pod escaped" : "capsule escaped" : p.leftBehind ? "left behind" : p.lost ? "lost" : "stranded"
+      fate: p.escaped ? p.aboard ? "pod escaped" : "capsule escaped" : p.ending === "eva_lost" ? "lost on EVA" : p.leftBehind ? "left behind" : p.lost ? "lost" : "stranded"
     })),
     finale: game.finale ? { pod: game.finale.pod.status, history: game.finale.history } : null
   };
