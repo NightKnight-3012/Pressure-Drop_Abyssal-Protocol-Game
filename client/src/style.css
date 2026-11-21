@@ -201,7 +201,7 @@ body.following-crew #look-prompt { visibility: hidden; }
 .spectate small:empty { display: none; }
 
 .side-panel { position: absolute; top: 150px; padding: 12px 14px; background: #020c14b8; border: 1px solid #70eaff30; font-size: 10px; max-width: 270px; }
-.systems { left: 22px; }
+.systems { left: 22px; max-height: min(58vh, 520px); overflow-y: auto; }
 .roster { right: 22px; min-width: 190px; }
 .roster b#player-count { color: #d6e9ef; margin-left: 6px; }
 .system { display: grid; grid-template-columns: 14px 1fr auto; gap: 8px; align-items: start; margin-top: 8px; }

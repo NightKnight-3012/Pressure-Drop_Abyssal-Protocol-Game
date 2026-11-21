@@ -33,6 +33,14 @@ export function createRecoveryLift() {
     for (let y = 12; y < 55; y += 6) box(0.2, 0.3, 12, side * 6, y, -6, lamps);
   }
   box(12, 12, 1, 0, 4, -15);
+  // A pilot sight on the inner bulkhead stays in front of the bow after the
+  // entrance rails pass out of view. The split centreline shows lateral drift.
+  const sightPlate=box(7,4.8,.12,0,2,-14.43);
+  for(const side of [-1,1]){
+    box(.08,2.4,.10,side*1.65,2,-14.32,lamps);
+    for(const y of [1,2,3]) box(y===2?.85:.4,.08,.10,side*1.4,y,-14.31,lamps);
+  }
+  for(const y of [.5,3.5])box(.12,.65,.10,0,y,-14.31,lamps);
   const carrier=box(7, 0.35, 9, 0, -1.1, -3);
   const doors = [-1, 1].map(side => box(6, 12, 0.8, side * 9.1, 4, 5));
   const clamps = [-1, 1].map(side => box(0.6, 1.4, 2, side * 3.7, -0.3, -3));
@@ -46,6 +54,7 @@ export function createRecoveryLift() {
   for (const [material, meshes] of batches) {
     const batch = new THREE.InstancedMesh(unitBox, material, meshes.length);
     meshes.forEach((mesh, i) => { mesh.updateMatrix(); batch.setMatrixAt(i, mesh.matrix); });
+    if(material===steel)batch.setColorAt(meshes.indexOf(sightPlate),new THREE.Color(0x64686b));
     root.add(batch);
   }
   root.add(new THREE.PointLight(0x65d8db, 55, 35));

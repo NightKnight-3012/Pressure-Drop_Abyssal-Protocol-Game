@@ -30,7 +30,7 @@ export function objectiveFor(state, me) {
     return `BOARD AT THE POD HATCH! Launch in ${state.boarding?.endsIn ?? 0}s (${inPod}/${boardable.length} seated)`;
   }
   if (state.lockdown.active) return "LOCKDOWN: sealed crews must hold their room's door panel AT THE SAME TIME. Use chat.";
-  if (state.oxygen < 20 && done("lifesupport") && st.o2 === "ready") return "OXYGEN LOW: refill at the Oxygen reserve in the Medical Bay.";
+  if (state.oxygen < (state.mission === 'overhaul' ? 35 : 20) && done("lifesupport") && st.o2 === "ready") return "OXYGEN LOW: refill at the Oxygen reserve in the Medical Bay.";
   if (!done("power")) return "Restore power: repair the Power core (Engineering, east wall).";
   if(me?.ext) {
     const notice=exteriorNotice(me);if(notice)return `${notice}. Follow the survey posts home; supplies are optional.`;
@@ -56,11 +56,19 @@ export function objectiveFor(state, me) {
   if (st.console !== "done") return "Repair the Command console (Control Room, north wall).";
   if (st.lifesupport !== "done") return "Repair the Life support unit (Medical Bay, south wall).";
   const junctions = Object.keys(st).filter((id) => STATIONS[id]?.junction && st[id] !== "done");
+  const annexJobs = ['compressor', 'scrubber', 'isolation'];
+  const annexJob = annexJobs.find(id => st[id] === 'ready' && STATIONS[id].dept === me?.dept)
+    ?? annexJobs.find(id => st[id] === 'ready');
+  if (annexJob) {
+    const bay = annexJob === 'isolation' ? 'Pressure test bay' : 'Compressor bay';
+    return `OVERHAUL / ${STATIONS[annexJob].label} needs work. Take the east service corridor from Engineering to the ${bay}.`;
+  }
   if (junctions.length) {
     return me?.dept === "eva" || !state.players.some((p) => p.dept === "eva" && !p.lost)
       ? `Divers: cycle the airlock (Medical Bay, west wall) and repair ${junctions.length} cable junction(s) outside.`
       : `Waiting on the divers: ${junctions.length} cable junction(s) left outside the hull.`;
   }
+  if (st.pressure_test === 'ready') return 'OVERHAUL / Run the launch pressure test in the far bay of the east utility annex.';
   if (st.launch !== "done") return "All systems ready: start the launch at the Pod launch console.";
   return "Launching...";
 }

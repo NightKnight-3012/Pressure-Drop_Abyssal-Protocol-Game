@@ -2,7 +2,7 @@ import * as THREE from "three";
 import {createFrameStats} from "./frame-stats.js";
 import {
   EYE_HEIGHT, DOWNED_EYE_HEIGHT, STAMINA, WALK_SPEED, RUN_SPEED, SWIM_SPEED, FLOODED_SPEED_FACTOR, FLOODED_SLOW_LEVEL, PLAYER_RADIUS,
-  INNER, EXT_LIMIT, REPAIR_RANGE, BREACH_RANGE, TREAT_RANGE, CONSOLE_RANGE, STATIONS, ROOM_IDS, ROOMS, DEPTS,
+  insideStation, annexBay, EXT_LIMIT, REPAIR_RANGE, BREACH_RANGE, TREAT_RANGE, CONSOLE_RANGE, STATIONS, ROOM_IDS, ROOMS, DEPTS,
   roomAt, collides, zoneLabel, LOCKERS, LOCKER_RANGE
 } from "../../shared/layout.js";
 import { net } from "./network.js";
@@ -139,16 +139,33 @@ export function startGame({ playerId, code, match, chat }) {
   let lastQuality = options.quality;
   const matchGame = G;
   let loadingFinish = false;
+  let finishTimer, finishIdle;
   const configureFinish = () => {
     if (matchGame.finish) { matchGame.finish.configure(options); return; }
     if (options.quality === 'low' || !renderer.extensions?.has('EXT_color_buffer_float') || loadingFinish) return;
     loadingFinish = true;
     import('./world-finish.js').then(({createWorldFinish}) => {
       if (G !== matchGame) return;
-      if (options.quality === 'low') { loadingFinish = false; return; }
-      matchGame.finish = createWorldFinish(renderer, scene, camera);
-      matchGame.finish.configure(options);
+      const initialize = () => {
+        if (G !== matchGame || matchGame.over) return;
+        if (options.quality === 'low') { loadingFinish = false; return; }
+        try {
+          matchGame.finish = createWorldFinish(renderer, scene, camera);
+          matchGame.finish.configure(options);
+        } catch (error) {
+          console.warn('Optional lighting effects unavailable:', error);
+        }
+      };
+      // Let the opening frames paint before generating the reflection map on the GPU.
+      finishTimer = window.setTimeout(() => {
+        if (window.requestIdleCallback) finishIdle = window.requestIdleCallback(initialize, {timeout: 2500});
+        else initialize();
+      }, 1200);
     }).catch(error => console.warn('Optional lighting effects unavailable:', error));
+  };
+  matchGame.cancelFinishStartup = () => {
+    window.clearTimeout(finishTimer);
+    if (finishIdle !== undefined) window.cancelIdleCallback(finishIdle);
   };
   configureFinish();
   G.unbindOptions = onOptionsChange(() => {
@@ -179,7 +196,7 @@ export function startGame({ playerId, code, match, chat }) {
   refreshInput();
   if (G.phase === "briefing") hud.showBriefing(meOf()?.dept, match.briefingEndsIn / 1000, match.state);
   if (match.state.status !== "playing" && match.state.outcome) handleOver(match.state.outcome); // joined a finished match
-  frame();
+  G.raf = requestAnimationFrame(frame);
   return true;
 }
 
@@ -187,6 +204,7 @@ export function stopGame() {
   if (!G) return;
   document.body.classList.remove('working');
   cancelAnimationFrame(G.raf);
+  G.cancelFinishStartup();
   clearInterval(G.pilotTimer);
   window.removeEventListener("resize", G.onResize);
   G.input.dispose();
@@ -298,6 +316,7 @@ function nearestTarget() {
   for (const id of Object.keys(s.stations)) {
     const st = STATIONS[id];
     if (!!st.exterior !== !!me.ext) continue;
+    if (st.overhaul && annexBay(p.x,p.z) !== annexBay(st.x,st.z)) continue;
     const state = s.stations[id];
     const consoleOpenable = id === "console" && state === "done";
     if (state === "done" && !consoleOpenable) continue;
@@ -354,7 +373,7 @@ function promptFor(t, me) {
   if (t.state === "cooldown") return `${st.label.toUpperCase()}: RECHARGING`;
   if (t.state === "locked") {
     if (st.kind === "door") return "NO POWER - THE DOORS NEED POWER";
-    const missing = (st.requires || []).find((r) => r === "junctions" ? Object.keys(s.stations).some((id) => STATIONS[id].junction && s.stations[id] !== "done") : s.stations[r] !== "done");
+    const missing = (st.requires || []).find((r) => r === "junctions" ? Object.keys(s.stations).some((id) => STATIONS[id].junction && s.stations[id] !== "done") : s.stations[r] !== undefined && s.stations[r] !== "done");
     const what = missing === "junctions" ? "THE OUTSIDE CABLE JUNCTIONS" : (STATIONS[missing]?.label ?? "SOMETHING").toUpperCase();
     return `${st.label.toUpperCase()}: NEEDS ${what} FIRST`;
   }
@@ -520,8 +539,8 @@ function movePlayer(dt, me) {
   const yaw = G.input.yaw, d = speed * dt;
   const dx = (-Math.sin(yaw) * f + Math.cos(yaw) * s) * d;
   const dz = (-Math.cos(yaw) * f - Math.sin(yaw) * s) * d;
-  const p = G.player, closed = closedRooms(G.state), limit = me.ext ? EXT_LIMIT : INNER;
-  const blocked = (x, z) => collides(x, z, PLAYER_RADIUS, closed, me.ext) || Math.abs(x) > limit || Math.abs(z) > limit;
+  const p = G.player, closed = closedRooms(G.state);
+  const blocked = (x, z) => collides(x, z, PLAYER_RADIUS, closed, me.ext) || (me.ext ? Math.abs(x) > EXT_LIMIT || Math.abs(z) > EXT_LIMIT : !insideStation(x, z));
   if (!blocked(p.x + dx, p.z)) p.x += dx; // one axis at a time lets you slide along walls
   if (!blocked(p.x, p.z + dz)) p.z += dz;
   return running;
@@ -667,7 +686,7 @@ function step() {
   hud.setUnderwater(under && !reduced);
   const holdIds = new Set(Object.values(state.holds).map((h) => h.id));
   const alert = state.lockdown.active || state.stage === "boarding" ? 1 : state.oxygen < 15 ? 0.6 : 0;
-  if (!G.viewPod) G.world.update(state, { dt, time, now, reducedEffects: reduced, holdIds, alert, viewer: camera.position, camera, flashlightOn,selfId:watched?.id ?? G.playerId });
+  if (!G.viewPod) G.world.update(state, { dt, time, now, reducedEffects: reduced, holdIds, alert, viewer: camera.position, camera, outside, underwater:under, flashlightOn,selfId:watched?.id ?? G.playerId });
   if (G.repairId && Math.hypot(G.player.x - STATIONS[G.repairId].x, G.player.z - STATIONS[G.repairId].z) > REPAIR_RANGE + 0.3) closeRepair();
 
   // ---- warnings

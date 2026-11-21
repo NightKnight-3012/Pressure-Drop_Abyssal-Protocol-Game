@@ -18,7 +18,7 @@ const front = (st, d = 1.3) => ({ x: st.x + Math.sin(st.rot) * d, z: st.z + Math
 const DT = 0.1;
 const WALK = 3;   // effective walking speed in m/s (corners, doors, looking around)
 
-export function simulate(n, seed, { reaction = Number(process.env.REACTION) || 9, runChance = process.env.RUN !== undefined ? Number(process.env.RUN) : 0.12,movement=process.env.EVA_TRAVEL||'legacy',audit=!!process.env.BALANCE_AUDIT } = {}) {
+export function simulate(n, seed, { reaction = Number(process.env.REACTION) || 9, runChance = process.env.RUN !== undefined ? Number(process.env.RUN) : 0.12,movement=process.env.EVA_TRAVEL||'legacy',audit=!!process.env.BALANCE_AUDIT,mission=process.env.BALANCE_MISSION || 'blackout' } = {}) {
   if(!['legacy','retreat','continuous'].includes(movement))throw Error('EVA_TRAVEL must be legacy, retreat or continuous.');
   let NOW = 1_000_000;
   const randomDecision = mulberry32(seed ^ 0x51a7);
@@ -27,7 +27,7 @@ export function simulate(n, seed, { reaction = Number(process.env.REACTION) || 9
     busyUntil: 0, plan: null
   }));
   assignDepartments(players);
-  const game = createGame({ players, now: NOW, seed });
+  const game = createGame({ players, now: NOW, seed, mission });
   game.holds.clear();
   const survivalAudit=audit?createSurvivalAudit():null;survivalAudit?.observe(game,players);
   const stats = { minO2: 100, maxFlood: 0, lost: 0,drownDowns:0,airDowns:0,impactDowns:0,otherDowns:0,evaDowns:0,evaAirDowns:0,evaContactDowns:0,electricDowns:0,skitterDowns:0 };
@@ -47,7 +47,7 @@ export function simulate(n, seed, { reaction = Number(process.env.REACTION) || 9
     travelStats.routes++;p.plan={at:Infinity,pos,id,travel};
   }
   const idle = (p) => !p.plan && !game.holds.has(p.id) && isActive(p);
-  const taskReady = (id) => game.tasks[id] && !game.tasks[id].done && !(STATIONS[id].requires || []).some((r) => r === "junctions" ? !game.activeJunctions.every((j) => game.tasks[j].done) : !game.tasks[r].done) &&
+  const taskReady = (id) => game.tasks[id] && !game.tasks[id].done && !(STATIONS[id].requires || []).some((r) => r === "junctions" ? !game.activeJunctions.every((j) => game.tasks[j].done) : game.tasks[r] && !game.tasks[r].done) &&
     ![...game.holds.values()].some((h) => h.id === id) && ![...players].some((q) => q.plan?.id === id);
   const power = () => game.tasks.power.done;
 
@@ -126,7 +126,9 @@ export function simulate(n, seed, { reaction = Number(process.env.REACTION) || 9
       }
       // Critical air is a crew-wide emergency. A medic should not repeatedly
       // choose individual revives or patch jobs while the whole crew suffocates.
-      if (p.dept === "medical" && game.tasks.lifesupport.done && game.oxygen < 30 && game.time >= game.o2ReadyAt) { go(p, front(STATIONS.o2), "o2"); continue; }
+      const refill = p.dept === 'medical' || (mission === 'overhaul' && !players.some(q => q.dept === 'medical' && isActive(q) && !q.exterior));
+      const refillAt = mission === 'overhaul' ? 35 : 30;
+      if (refill && game.tasks.lifesupport.done && game.oxygen < refillAt && game.time >= game.o2ReadyAt && !players.some(q => q.plan?.id === 'o2') && ![...game.holds.values()].some(h => h.id === 'o2')) { go(p, front(STATIONS.o2), "o2"); continue; }
       const dangerous=game.threats.electric?.room;
       if(dangerous&&game.roomCircuits[dangerous]&&!players.some(q=>q.plan?.id===`circuit:${dangerous}`)&&![...game.holds.values()].some(h=>h.id===`circuit:${dangerous}`)){go(p,CIRCUITS[dangerous],`circuit:${dangerous}`);continue;}
       if(game.threats.warden){p.flashlight=false;const lit=Object.keys(CIRCUITS).find(r=>game.roomCircuits[r]&&!players.some(q=>q.plan?.id===`circuit:${r}`)&&![...game.holds.values()].some(h=>h.id===`circuit:${r}`));if(lit){go(p,CIRCUITS[lit],`circuit:${lit}`);continue;}}
@@ -141,13 +143,15 @@ export function simulate(n, seed, { reaction = Number(process.env.REACTION) || 9
       // medical keeps the air breathable
       if (p.dept === "medical" && game.tasks.lifesupport.done && game.oxygen < 55 && game.time >= game.o2ReadyAt) { go(p, front(STATIONS.o2), "o2"); continue; }
       // each department prefers its own tasks, but anyone helps when something is waiting (small crews!)
-      const own = { engineering: ["power", "pump"], command: ["console"], medical: ["lifesupport"], eva: [] }[p.dept];
+      const own = { engineering: ["power", "pump", "compressor"], command: ["console", "isolation"], medical: ["lifesupport", "scrubber"], eva: [] }[p.dept];
       const hasEva = players.some((q) => q.dept === "eva" && !q.lost); // a lost diver can be replaced by anyone
       const order = [...own, "power", "pump", "console", "lifesupport"];
       const next = order.find((id) => taskReady(id));
       if (next) { go(p, front(STATIONS[next]), next); continue; }
       const junctionsLeft = game.activeJunctions.some((id) => !game.tasks[id].done);
       if (junctionsLeft && (p.dept === "eva" || !hasEva) && power() && !players.some((q) => (q.exterior && !q.lost) || q.plan?.id === "airlock_in")) { go(p, front(STATIONS.airlock_in), "airlock_in"); continue; }
+      const annex = ['compressor', 'scrubber', 'isolation', 'pressure_test'].find(taskReady);
+      if (annex) { go(p, front(STATIONS[annex]), annex); continue; }
       if (taskReady("launch") && (p.dept === "medical" || !players.some((q) => q.dept === "medical" && isActive(q)))) go(p, front(STATIONS.launch), "launch");
     }
   }

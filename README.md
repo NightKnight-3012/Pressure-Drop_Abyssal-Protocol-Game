@@ -14,6 +14,10 @@ Visuals use free CC0 models by Quaternius and Gobkit alongside original procedur
 
 See [release status and known limitations](RELEASE-STATUS.md) for the current playtest gates and validation scope. Escape opens the in-game menu; multiplayer continues while it is open.
 
+For a longer run, the host can choose **Deep overhaul · extended** under **Mission Profile**. The east service corridor opens off Engineering, near the Power core. Recommission the intake compressor and CO₂ scrubber, then isolate the launch feed in the far bay. The final pressure test waits for the outside launch cables. Specialists can split the jobs, and one player can complete every step. All profiles can explore the annex; only Deep overhaul requires its machinery for launch. The two bays are part of Engineering's shared flood and power sector.
+
+Run `npm run test:station` for the annex rules, geometry and route checks. After building, `node test/review-current-ui.mjs --annex-only` checks live server movement through the new entrance and captures the machinery and task interface. In PowerShell, set `$env:BALANCE_MISSION='overhaul'` before `npm run balance -- 0 60` to run the longer mission, then clear it with `Remove-Item Env:BALANCE_MISSION`.
+
 ## Quick start
 
 Requirements: [Node.js](https://nodejs.org) 24.20 or newer (required for built-in SQLite persistence) and a modern browser with WebGL.
@@ -459,7 +463,7 @@ The final balance audit also reports actual lost players, average escaped crew a
 
 Settled players can follow connected crewmates with Tab and radio the watched player's location with P. The spectator panel identifies whether the camera is following someone in the station, outside the hull, in the survey sub, or aboard the escape pod. The mission debrief lists extraction routes and reports each player's contribution points, revives and time before extraction or loss. Flooded compartments gradually take on a steady red tint, with the water level and suit warnings providing separate cues.
 
-Balanced and High add subtle metal reflections and thresholded bloom to the station and exterior on browsers with HDR render-target support. Low uses direct rendering. Reduced effects disables bloom, spray motion, the suit edge effect, and damage flashes. The pod and epilogue use their dedicated render paths. The Brightness slider works in both render paths. Compare presets in Display & Controls using the measured frame time, especially during flooding and an exterior retreat.
+Balanced and High add subtle metal reflections and thresholded bloom to the station and exterior on browsers with HDR render-target support. Observation ports cast soft shafts and rippled highlights onto the deck. Outside or submerged, the suit lamp picks up suspended silt. Low and Reduced effects disable these scattering effects. The cradle has a fixed alignment sight on every preset. Low uses direct rendering. Reduced effects disables bloom, spray motion, the suit edge effect, and damage flashes. The pod and epilogue use their dedicated render paths. The Brightness slider works in both render paths. Compare presets in Display & Controls using the measured frame time, especially during flooding and an exterior retreat.
 
 `npm run audit:eva-travel -- 60` compares the original delayed-arrival simulator with continuous emergency retreat and continuous exterior travel over matching seeds. These optional modes use swim speed and swept exterior collision; indoor travel and the finale driver remain approximations. `npm run test:exterior-travel` checks all required airlock/junction routes, reaction time, speed limits and blocked paths. The default balance mode remains unchanged; PowerShell users can select a diagnostic mode with `$env:EVA_TRAVEL="continuous"` and remove it afterward.
 

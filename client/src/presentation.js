@@ -22,7 +22,7 @@ export function roleBriefing(state, dept) {
   };
   const [location, task] = roles[dept] || ["NEREID-9 / CREW", "Follow the suit objective and restore the launch systems with your crew."];
   const count = state.players.filter(p => !p.lost).length;
-  return { location, task, evacuation: count > state.seats
+  return { location, task: state.mission === 'overhaul' ? `${task} Before launch, recommission the utility annex east of Engineering.` : task, evacuation: count > state.seats
     ? `${state.seats} pod seats for ${count} crew. Confirm a private evacuation ballot before boarding. Anyone left in the station still has a route and a choice.`
     : `${state.seats} pod ${state.seats === 1 ? "seat" : "seats"} available. Everyone has a seat: board through the pod hatch after the launch systems are restored.`,
     route: "The main lift cable is severed. Pilot the MANTA through the wreckage to the auxiliary cradle. Center with A/D, release boost and hold S to dock." };

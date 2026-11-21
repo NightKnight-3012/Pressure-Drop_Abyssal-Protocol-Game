@@ -27,7 +27,7 @@ function setClass(el, name, on) {
 }
 const fmtTime = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 
-const SYSTEM_ROWS = ["power", "pump", "console", "lifesupport", "o2", "j1", "j2", "j3", "launch"];
+const SYSTEM_ROWS = ["power", "pump", "console", "lifesupport", "o2", "j1", "j2", "j3", "compressor", "scrubber", "isolation", "pressure_test", "launch"];
 
 // What should this player be doing right now? Returns one line of guidance.
 export {objectiveFor} from './objectives.js';

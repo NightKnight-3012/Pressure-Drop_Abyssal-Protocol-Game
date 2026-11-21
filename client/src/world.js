@@ -11,7 +11,9 @@ import { createOcean, oceanHeight } from "./ocean.js";
 import { createWreckage } from "./wreckage.js";
 import { createEscapeCraft, fitEscapeCraft } from "./escape-craft.js";
 import { createStationDetail, ROOM_LIGHT_COLORS } from "./station-detail.js";
+import { createLightScattering } from "./light-scattering.js";
 import { createPowerUnit } from "./power-unit.js";
+import { addUtilityAnnex } from './utility-annex.js';
 import {createStationExterior} from './station-exterior.js';
 import { createEquipmentView } from './equipment-view.js';
 import { createLockerView } from './locker-view.js';
@@ -23,7 +25,7 @@ import {createSubView} from './sub-view.js';
 import {createExplorationView} from './exploration-view.js';
 import {
   WALLS, POD, STATIONS, STATION_IDS, WINDOWS, WINDOW_W, WINDOW_Y0, WINDOW_Y1, DOOR_SLABS, ROOM_IDS, ROOMS,
-  INNER, HUB, HULL_OUT, SERVICE_PORTALS, ROOM_PARTITIONS, EXT_LIMIT
+  INNER, HUB, HULL_OUT, SERVICE_PORTALS, ROOM_PARTITIONS, EXT_LIMIT, ANNEX_ENTRY, ANNEX_DECKS
 } from "../../shared/layout.js";
 
 const WALL_H = 4;
@@ -64,6 +66,7 @@ export function buildWorld(scene) {
   const exploration = createExplorationView(scene,surfaces);
   createStationExterior(scene);
   const detail = createStationDetail(scene);
+  const scattering = createLightScattering(scene);
   const glow = glowTexture();
   const models = createModelLibrary();
   let disposed = false;
@@ -96,6 +99,13 @@ export function buildWorld(scene) {
   ceiling.rotation.x = Math.PI / 2;
   ceiling.position.y = WALL_H;
   scene.add(ceiling);
+  addUtilityAnnex(scene, surfaces, WALL_H);
+  for (const [x, text] of [[10.113,'EAST SERVICE / UTILITY ANNEX'],[15.613,'01  COMPRESSOR BAY'],[20.663,'02  PRESSURE TEST']]) {
+    const sign = new THREE.Mesh(new THREE.PlaneGeometry(1.85,.26),new THREE.MeshBasicMaterial({map:makeLabel(text,'#dec194'),transparent:true}));
+    sign.position.set(x,3.38,-8.2);
+    sign.rotation.y = -Math.PI / 2;
+    scene.add(sign);
+  }
 
   const wallMat = std(0x3c5360, { map: surfaces.wall, roughness: 0.66, metalness: 0.3 });
   for (const w of WALLS.slice(4)) { // inner cross walls
@@ -124,6 +134,7 @@ export function buildWorld(scene) {
     const fixed = side === "N" || side === "W" ? -10 : 10;   // z (or x) of the wall's centre line
     const wins = WINDOWS.filter((w) => w.wall === side).sort((a, b) => a.c - b.c);
     const place = (u0, u1, y0, y1, mat) => {
+      if (side === 'E') u0 = Math.max(u0, ANNEX_ENTRY.maxZ);
       if (u1 - u0 < 0.01) return;
       const len = u1 - u0, uc = (u0 + u1) / 2, h = y1 - y0;
       const m = new THREE.Mesh(horizontal ? new THREE.BoxGeometry(len, h, 0.4) : new THREE.BoxGeometry(0.4, h, len), mat);
@@ -202,6 +213,13 @@ export function buildWorld(scene) {
         grounding.rotation.x = -Math.PI / 2;
         grounding.position.set(0, .019, .3);
         group.add(grounding);
+      } else if (def.overhaul) {
+        body.scale.set(.88,.7,.76);
+        screen.scale.set(.88,.34,.8);
+        screen.position.set(0,1.29,.128);
+        const rail = new THREE.Mesh(new THREE.BoxGeometry(.64,.085,.035), std(0xc09e56,{map:surfaces.hazard}));
+        rail.position.set(0,.89,.13);
+        group.add(rail);
       } else if (!small && def.kind !== "airlock") {
         const modelId = id === "power" || id === "o2" ? "battery" : id === "pump" || id === "lifesupport" ? "pipes" : "computer";
         // Keep equipment inside the original panel footprint and retain its status display.
@@ -246,7 +264,7 @@ export function buildWorld(scene) {
     s.group.visible = visible;
     const color = LOOK[look] ?? LOOK.idle;
     s.screenMat.color.setHex(color); s.screenMat.emissive.setHex(color);
-    s.screenMat.emissiveIntensity = look === "done" ? 0.35 : look === "holding" ? 2.6 : 1.8;
+    s.screenMat.emissiveIntensity = look === "done" ? 0.35 : look === "holding" ? 2.6 : s.def.overhaul ? .9 : 1.8;
     s.beaconMat.color.setHex(color);
     s.beacon.visible = s.def.kind === "door" ? look === "alert" : look === "idle" || look === "holding" || look === "alert";
   }
@@ -267,6 +285,7 @@ export function buildWorld(scene) {
 
   // ================================================================ lights
   const lightSpots = [[-5, -5], [5, -5], [-5, 5], [5, 5], [0, 0]].map(([x,z],i)=>[x,z,ROOM_LIGHT_COLORS[i]]);
+  lightSpots.push([20.5,-8.2,0x88bac9]);
   const lights = lightSpots.map(([x, z, color]) => {
     const light = new THREE.PointLight(color, 14, 13, 1.5);
     light.position.set(x, 3.4, z);
@@ -275,7 +294,7 @@ export function buildWorld(scene) {
     const fixture = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.08, 0.38), fixtureMat);
     fixture.position.set(x, 3.95, z);
     scene.add(fixture);
-    const room = ROOM_IDS.find(id => ROOMS[id].sx === Math.sign(x) && ROOMS[id].sz === Math.sign(z));
+    const room = x > INNER ? 'engineering' : ROOM_IDS.find(id => ROOMS[id].sx === Math.sign(x) && ROOMS[id].sz === Math.sign(z));
     return { light, fixtureMat, room, baseColor: color, flickerUntil: 0 };
   });
   let power = false;
@@ -325,6 +344,7 @@ export function buildWorld(scene) {
     ];
   }
   planes.hub = [waterPlane(0, 0, HUB * 2, HUB * 2)];
+  for (const {cx,cz,w,d} of ANNEX_DECKS) planes.engineering.push(waterPlane(cx,cz,w,d));
   function setLevel(list, level, t) {
     for (const m of list) { m.visible = level > 0.02; m.position.y = level + Math.sin(t * 1.6 + m.position.x) * 0.012; }
   }
@@ -448,6 +468,7 @@ export function buildWorld(scene) {
     }
     surfaces.update(time, reducedEffects);
     detail.update(state, { ...ctx, quality:options.quality });
+    scattering.update(ctx, options.quality);
     ocean.update();
     snowGeo.setDrawRange(0, Math.floor(snowCount * QUALITY[options.quality].particles));
     for (const [id, material] of Object.entries(emergencyLooks)) {
@@ -457,7 +478,7 @@ export function buildWorld(scene) {
     power = state.power && (!state.finale || state.finale.station.power > 5);
     for (const id of STATION_IDS) {
       const s = state.stations[id];
-      if (!s) { setStationLook(id, "done", false); continue; } // inactive junctions are hidden
+      if (!s) { setStationLook(id, "done", !!STATIONS[id].overhaul); continue; } // inactive annex cabinets stay physically visible
       const def = STATIONS[id];
       let look;
       if (holdIds.has(id) || id === 'pump' && holdIds.has('service:pump')) look = "holding";

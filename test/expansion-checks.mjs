@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import {collides,roomAt,ROOM_IDS,SERVICE_PORTALS,STATIONS,spawnPoint,HUB} from '../shared/layout.js';
+import {collides,insideStation,roomAt,ROOM_IDS,SERVICE_PORTALS,STATIONS,spawnPoint,HUB} from '../shared/layout.js';
 import {routeFrame,createRoute} from '../shared/escape-route.js';
 import {rescuePose,RESCUE_DURATION,RESCUE_SEA_LEVEL} from '../client/src/rescue-sequence.js';
 import {createRouteScenery} from '../client/src/route-scenery.js';
@@ -12,7 +12,7 @@ function reachable(closed=[],avoidHub=false) {
   const q=[[Math.round(start.x/step)*step,start.z]],seen=new Set([key(...q[0])]);
   for(let i=0;i<q.length;i++)for(const [dx,dz] of [[step,0],[-step,0],[0,step],[0,-step]]) {
     const x=q[i][0]+dx,z=q[i][1]+dz,k=key(x,z);
-    if(seen.has(k)||Math.abs(x)>9.35||Math.abs(z)>9.35||avoidHub&&Math.abs(x)<HUB+.45&&Math.abs(z)<HUB+.45||collides(x,z,.4,closed))continue;
+    if(seen.has(k)||!insideStation(x,z)||avoidHub&&Math.abs(x)<HUB+.45&&Math.abs(z)<HUB+.45||collides(x,z,.4,closed))continue;
     seen.add(k);q.push([x,z]);
   }return q;
 }

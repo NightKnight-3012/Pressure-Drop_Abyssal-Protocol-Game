@@ -34,6 +34,8 @@ The gameplay-integrity follow-up adds collision-aware EVA simulator modes and si
 
 ## Required release checks
 
+Deep overhaul adds four mandatory annex jobs and prompts crews to refill oxygen earlier because of the longer route. In 60 seeded matches per crew size, scripted teams won 92–100% across sizes 1–8. Solo matches averaged 11m 20s in Deep overhaul and 6m 05s in Blackout. Human timings and full-crew survival still need playtesting.
+
 For the combined playtest, start with the solo recovery drill on the laptop you normally use. Then run a five-player match and a seven- or eight-player match if possible. Record when the first diver goes down, whether the contact warning gave them time to react, how many crew are conscious at launch, and who reaches extraction by each route. Have an extracted player follow an active survivor and radio their location. Review the final crew report against what happened in the match. Watch for sustained stutter during flooding, close encounters and docking.
 
 - Fresh human tests at 1, 3-4 and 8 players: warning clarity, individual survival, useful role/passenger jobs, exploration risk/reward and survivor choices.

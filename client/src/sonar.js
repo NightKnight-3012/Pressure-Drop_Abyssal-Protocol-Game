@@ -1,5 +1,5 @@
 // The sonar screen shown on the Command console: where the Leviathan is, plus the crew.
-import { EXT_LIMIT, HULL_OUT, WALLS, EXTERIOR_STRUCTURES, EXTERIOR_ROUTES } from "../../shared/layout.js";
+import { EXT_LIMIT, WALLS, EXTERIOR_STRUCTURES, EXTERIOR_ROUTES } from "../../shared/layout.js";
 import { SALVAGE } from '../../shared/salvage.js';
 
 const RANGE = EXT_LIMIT+4; // all survey routes fit on Command's tactical display
@@ -30,9 +30,8 @@ export function drawSonar(canvas, state, time) {
   g.fillStyle='#90aaa9';g.font='8px monospace';
   g.fillText('VENT GARDEN',c-52*k,c+30*k);g.fillText('WRECK',c+32*k,c+27*k);g.fillText('BASALT CLEFT',c-16*k,c-48*k);
   g.strokeStyle = "rgba(160,200,215,0.7)"; g.lineWidth = 1.5;
-  g.strokeRect(c - HULL_OUT * k, c - HULL_OUT * k, HULL_OUT * 2 * k, HULL_OUT * 2 * k);
   g.beginPath();
-  for(const wall of WALLS.slice(4)) {
+  for(const wall of WALLS) {
     const horizontal=wall.w>wall.d;
     g.moveTo(c+(wall.cx-(horizontal?wall.w/2:0))*k,c+(wall.cz-(horizontal?0:wall.d/2))*k);
     g.lineTo(c+(wall.cx+(horizontal?wall.w/2:0))*k,c+(wall.cz+(horizontal?0:wall.d/2))*k);

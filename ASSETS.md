@@ -96,3 +96,7 @@ The three authored collapse sections in client/src/collapse-section.js are origi
 Articulated fingers, opposable thumbs, two-bone arm rig, lower work stance and offset wrench head are original procedural geometry/animation in client/src/hand-rig.js and work-hands.js. The 28 finger segments share one instanced draw; four sleeve segments share another. Contact queries use existing equipment geometry, with no imported rigs, paid services, new recordings or new licences.
 
 The lighting finish generates a reflection map locally using Three.js's bundled RoomEnvironment. Equipment contact shading and breach spray reuse the original procedural radial texture. Survey lamps use original geometry, and repair confirmation layers existing local sounds. No new downloaded media or external services are used.
+
+The east utility annex and its machinery use original procedural geometry in five material batches. Floor grates, wall panels and hazard markings reuse existing procedural textures. Wayfinding signs use the game's canvas lettering.
+
+Observation-port shafts, rippled floor highlights, the underwater suit beam and the recovery lift's pilot alignment marks use original procedural masks and geometry.

@@ -112,6 +112,8 @@ const until = async (fn, ms = 6000) => { const t = Date.now(); while (Date.now()
   ok("renderer is rendering frames", (w.__frames || 0) > 20, String(w.__frames));
   ok("HUD shows department badge", /ENG/.test(txt("dept-badge")), txt("dept-badge"));
   ok("systems panel lists the stations (8 shown for 4 players)", [...$("systems-list").children].filter((r) => !r.classList.contains("hidden")).length === 8);
+  const systemLabels = () => [...$("systems-list").querySelectorAll('.system b')].map(row => row.textContent);
+  const firstSystems = systemLabels();
   ok("crew roster shows 4 crew", $("roster-list").children.length === 4);
   ok("objective points at the Power core", /power/i.test(txt("objective")), txt("objective"));
   ok("starting location is the Control Room", /CONTROL ROOM/.test(txt("room-name")), txt("room-name"));
@@ -474,7 +476,8 @@ const until = async (fn, ms = 6000) => { const t = Date.now(); while (Date.now()
   ok("a replay starts with clean damage and water overlays", Number($("damage-flash").style.opacity) === 0 && !$("underwater").classList.contains("on"));
   const g2 = api.rooms.get(code).game;
   ok("the second match is fresh", !g2.tasks.power.done);
-  ok("replaying does not duplicate system rows", $("systems-list").children.length === 9);
+  const secondSystems = systemLabels();
+  ok("replaying does not duplicate system rows", secondSystems.join('\n') === firstSystems.join('\n') && new Set(secondSystems).size === secondSystems.length);
   await tap("Escape"); ok("Escape opens the in-game menu", vis("pause"));
   $("pause-resume").click(); ok("resume closes the in-game menu", !vis("pause"));
   await tap("Enter"); $("chat-input").value = "second expedition radio check";

@@ -7,7 +7,7 @@ import {FLOODING,breachSeverity,pumpCapacity,drainShared} from './flooding.js';
 import {
   MAX_HP, STAMINA, FLOOD_MAX, DROWN_DEPTH, ROOM_IDS, ROOMS, DEPT_IDS, STATIONS, STATION_IDS, JUNCTION_IDS, DOOR_STATION,
   REPAIR_RANGE, BREACH_RANGE, TREAT_RANGE, CONSOLE_RANGE, AIRLOCK_ARRIVE_EXT, AIRLOCK_ARRIVE_INT,
-  roomAt, collides, doorwayBlocked, nearestFree, spawnPoint, scalingFor, seatsFor, LOCKERS, LOCKER_RANGE
+  roomAt, annexBay, collides, doorwayBlocked, nearestFree, spawnPoint, scalingFor, seatsFor, LOCKERS, LOCKER_RANGE
 } from "../shared/layout.js";
 import { createLeviathan, stepLeviathan, levPosition } from "./leviathan.js";
 import { MISSIONS, FINALE_POINTS, REPAIR_TYPES, repairSpec, atPoint } from "../shared/tactical.js";
@@ -149,7 +149,12 @@ export function createGame({ players, now = Date.now(), seed = (Math.random() * 
     stage: "main", vote: null, boarding: null, finale: null, capsuleDiscovered: false,
     calibrations: Object.fromEntries(Object.keys(REPAIR_TYPES).map(id => [id, repairSpec(id, seed)]))
   };
-  for (const id of STATION_IDS) if (STATIONS[id].kind === "task") game.tasks[id] = { done: false, by: null };
+  for (const id of STATION_IDS) {
+    const station = STATIONS[id];
+    if (station.kind === 'task' && (!station.overhaul || MISSIONS[game.mission].overhaul && !game.practice)) {
+      game.tasks[id] = { done: false, by: null };
+    } else if (station.overhaul) delete game.calibrations[id];
+  }
   players.forEach((p, i) => resetPlayerForMatch(p, i));
   game.oxygen = MISSIONS[game.mission].oxygen;
   if(game.practice){game.nextBreachAt=game.lockdown.nextAt=game.complication.at=1e9;game.threats.skitterAt=game.threats.electricAt=game.threats.wardenAt=1e9;for(const mine of game.threats.mines)mine.active=false;game.story.available=[];}
@@ -284,7 +289,7 @@ function credit(p, key, amount = 1) {
 export function repairInput(game, p, id, value) {
   if (typeof id !== "string" || !Object.hasOwn(REPAIR_TYPES, id)) return "No such calibration panel.";
   const spec = game.calibrations?.[id], station = STATIONS[id];
-  if (game.status !== "playing" || !isActive(p) || !spec || !station || stationState(game, station) !== "ready" || dist(p, station) > REPAIR_RANGE) return "Stand at an available repair panel.";
+  if (game.status !== "playing" || !isActive(p) || !spec || !station || !stationReach(p, station) || stationState(game, station) !== "ready") return "Stand at an available repair panel.";
   if (!Number.isInteger(value) || value < 1 || value > (spec.type === "circuit" ? 3 : 4)) return "Invalid calibration input.";
   spec.value = spec.type === "circuit" ? spec.value ^ (1 << (value - 1)) : value;
   spec.solved = spec.value === spec.target;
@@ -292,12 +297,14 @@ export function repairInput(game, p, id, value) {
 }
 
 // ------------------------------------------------------------------ station helpers
-const stationActive = (game, st) => !st.junction || game.activeJunctions.includes(st.id);
+const stationActive = (game, st) => (!st.junction || game.activeJunctions.includes(st.id)) && (!st.overhaul || !!game.tasks[st.id]);
+const stationReach = (p, st) => !!st.exterior === !!p.exterior && dist(p, st) <= REPAIR_RANGE && (!st.overhaul || annexBay(p.x,p.z) === annexBay(st.x,st.z));
 export const powerOn = (game) => game.tasks.power.done;
 const doneCount = (game) => Object.values(game.tasks).filter((t) => t.done).length;
 
 function requirementMet(game, id) {
   if (id === "junctions") return game.activeJunctions.every((j) => game.tasks[j].done);
+  if (STATIONS[id]?.overhaul && !game.tasks[id]) return true;
   return !!game.tasks[id]?.done;
 }
 const stationLocked = (game, st) => (st.requires || []).some((r) => !requirementMet(game, r));
@@ -436,7 +443,7 @@ export function startHold(game, players, player, id) {
     const st = Object.hasOwn(STATIONS, id) ? STATIONS[id] : null;
     if (!st || !stationActive(game, st)) return "Invalid target.";
     if (!!st.exterior !== !!player.exterior) return player.exterior ? "Get back inside first." : "You can't reach that from inside.";
-    if (dist(player, st) > REPAIR_RANGE) return "Move closer to the panel.";
+    if (!stationReach(player, st)) return "Move closer to the panel.";
     const state = stationState(game, st);
     if (state === "done") return "Already repaired.";
     if (state === "locked") {
@@ -669,7 +676,7 @@ export function tickGame(game, players, nowMs = Date.now(), timeScale = 1) {
       } else {
         const st = STATIONS[hold.id];
         const state = stationState(game, st);
-        valid = dist(p, st) <= REPAIR_RANGE && !!st.exterior === !!p.exterior &&
+        valid = stationReach(p, st) &&
           (hold.mode === "override" ? state === "lockdown" : state === "ready");
       }
     }

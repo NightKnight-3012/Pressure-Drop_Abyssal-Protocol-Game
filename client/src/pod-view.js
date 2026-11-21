@@ -75,6 +75,9 @@ export function createPodView() {
       if (audible && motion.boost && !wasBoosting) sfx.podBoost();
       wasBoosting = audible && motion.boost;
       progress ??= pod.progress; progress += (pod.progress - progress) * k;
+      // Near the lift the bulkhead fills the windscreen. Dip the bow lamp over
+      // the last metres so pilots can distinguish the cradle marks from glare.
+      lamp.intensity = 155 - 105 * THREE.MathUtils.smoothstep(progress, POD_ROUTE_LENGTH-8, POD_ROUTE_LENGTH);
       const track=routeFrame(progress);corridor.update(progress);corridor.root.visible=!ascending;
       const oldLane = lane; lane += (pod.lane - lane) * k;
       velocity += (((lane - oldLane) / Math.max(dt, 0.001)) - velocity) * k;

@@ -26,7 +26,7 @@ const server = http.createServer(async (req, res) => {
 const repository=createRepository();
 const io = new Server(server), api = attachGame(io, { repository, log: { log() {}, error: console.error } });
 await new Promise(r => server.listen(3996, "127.0.0.1", r));
-const chrome = spawn(process.env.BROWSER_BIN || "C:/Program Files/Google/Chrome/Application/chrome.exe", ["--headless", "--no-sandbox", "--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--no-first-run", "--no-default-browser-check", "--remote-debugging-port=9225", `--user-data-dir=${resolve("test/.chrome-profile")}`, "about:blank"], { windowsHide: true, stdio: "ignore" });
+const chrome = spawn(process.env.BROWSER_BIN || "C:/Program Files/Google/Chrome/Application/chrome.exe", ["--headless", "--no-sandbox", "--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--no-first-run", "--no-default-browser-check", "--remote-debugging-port=9225", `--user-data-dir=${resolve(process.env.REVIEW_PROFILE || "test/.chrome-profile")}`, "about:blank"], { windowsHide: true, stdio: "ignore" });
 let ws, orbit = null, bots = [], errors = [], checks = 0;
 try {
   let pages;
@@ -61,7 +61,69 @@ try {
   await call("Emulation.setDeviceMetricsOverride", { width:1280,height:720, deviceScaleFactor: 1, mobile: false });
   await call("Page.navigate", { url: "http://127.0.0.1:3996" });
   await wait("document.getElementById('menu-status')?.textContent.includes('ONLINE')"); await capture("menu");
-  if(process.argv.includes('--baseline-only')){
+  if(process.argv.includes('--light-study')){
+    await evaluate("document.getElementById('player-name').value='Mara';document.getElementById('practice-start').click()");
+    await wait("document.getElementById('mission-chapter').textContent.includes('SIMULATOR')");
+    const r=[...api.rooms.values()][0];
+    r.phase='visual-fixture';
+    const g=r.game,p=r.matchPlayers[0];
+    for(const task of Object.values(g.tasks))task.done=true;
+    await evaluate("document.getElementById('opt-quality').value='balanced';document.getElementById('opt-quality').dispatchEvent(new Event('change'))");
+    const label=process.env.LIGHT_STUDY_LABEL||'after';
+    async function shot(name,x,z,rotation,exterior=false){
+      Object.assign(p,{x,z,rotation,exterior});
+      io.to(p.socketId).emit('player:correct',{x,z,rotation,teleport:true});
+      io.to(r.code).emit('game:state',snapshotGame(g,[p],Date.now()));
+      await sleep(1500);await capture('presentation-light-'+label+'-'+name);
+    }
+    await shot('window',6,-5,-1.05);
+    await shot('port',4,-6,.39);
+    await shot('repair',6,-6,0);
+    await shot('eva',28,18,Math.atan2(-10,18),true);
+    const reduce=()=>evaluate("document.getElementById('opt-reduced').click()");
+    await reduce();await capture('presentation-light-'+label+'-eva-reduced');await reduce();
+    p.aboard=true;p.exterior=false;beginFinale(g,[p],[]);
+    Object.assign(g.finale.pod,{phase:'rendezvous',progress:210,speed:0,dockProgress:.5});
+    await shot('dock',6,-6,0);
+  }else if(process.argv.includes('--annex-only')){
+    await evaluate("document.getElementById('opt-quality').value='low';document.getElementById('opt-quality').dispatchEvent(new Event('change'));document.getElementById('player-name').value='Mara';document.getElementById('create-room').click()");
+    await wait("!document.getElementById('lobby').classList.contains('hidden')");
+    const room=[...api.rooms.values()][0];
+    await evaluate("const mission=document.getElementById('mission-select');mission.value='overhaul';mission.dispatchEvent(new Event('change'));document.getElementById('dept-cards').children[0].click();document.getElementById('ready-button').click()");
+    await wait("!document.getElementById('start-button').disabled");
+    await evaluate("document.getElementById('start-button').click()");
+    await wait("!document.getElementById('game').classList.contains('hidden')");
+    room.briefingEndsAt=Date.now()-1;
+    for(let i=0;i<120&&room.phase!=='playing';i++)await sleep(50);
+    if(room.phase!=='playing'||room.game.mission!=='overhaul')throw Error('Deep overhaul did not start');
+    const game=room.game, p=room.matchPlayers[0];
+    game.nextBreachAt=game.lockdown.nextAt=1e9;
+    for(const id of ['power','pump','console','lifesupport'])game.tasks[id].done=true;
+    const place=(x,z,rotation)=>{
+      Object.assign(p,{x,z,rotation});
+      io.to(p.socketId).emit('player:correct',{x,z,rotation,teleport:true});
+      io.to(room.code).emit('game:state',snapshotGame(game,[p],Date.now()));
+    };
+    place(7.6,-8.2,-Math.PI/2);
+    await wait("document.getElementById('objective').textContent.includes('east service corridor')");
+    await capture('presentation-annex-entrance');
+    await key('KeyW');
+    try { for(let i=0;i<80&&p.x<11;i++)await sleep(100); }
+    finally { await key('KeyW','keyUp'); }
+    if(p.x<11)throw Error('Server did not accept movement through the annex entry');
+    checks++;
+    room.phase='visual-fixture';
+    place(12.6,-8.2,-Math.PI/2);await capture('presentation-annex-corridor');
+    place(17.7,-7.8,0);await capture('presentation-annex-compressor');
+    for(const id of ['compressor','scrubber','isolation',...game.activeJunctions])game.tasks[id].done=true;
+    place(24.25,-7.7,0);
+    await wait("document.getElementById('interaction').textContent.includes('LAUNCH PRESSURE TEST')");
+    await capture('presentation-annex-pressure');
+    await call('Emulation.setDeviceMetricsOverride',{width:520,height:640,deviceScaleFactor:1,mobile:false});
+    await evaluate("document.getElementById('wrist-toggle').click()");
+    await capture('presentation-annex-wrist-520');
+    if(await evaluate('document.documentElement.scrollWidth > innerWidth'))throw Error('Annex interface overflows narrow viewport');
+  } else if(process.argv.includes('--baseline-only')){
     await evaluate("document.getElementById('menu-options').click();document.getElementById('opt-quality').value='low';document.getElementById('opt-quality').dispatchEvent(new Event('change'));document.getElementById('options-close').click()");
     const sizes=[[1280,720],[520,640]];
     async function views(name){for(const [width,height] of sizes){await call('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:1,mobile:false});await capture(`presentation-baseline-${name}-${width}`);if(await evaluate('document.documentElement.scrollWidth')>width)throw Error('Horizontal overflow in '+name);if(await evaluate("(()=>{const input=document.getElementById('chat-input');if(input.classList.contains('hidden'))return false;const a=input.getBoundingClientRect(),b=document.getElementById('chat').getBoundingClientRect();return a.top<b.top||a.bottom>b.bottom+1;})()"))throw Error('Radio input clipped in '+name);if(!['menu','lobby'].includes(name)&&await evaluate("(()=>{const a=document.getElementById('chat').getBoundingClientRect(),m=document.querySelector('.meters'),b=m.getBoundingClientRect();return getComputedStyle(m).display!=='none'&&getComputedStyle(document.getElementById('chat')).visibility!=='hidden'&&a.height>0&&a.left<b.right&&a.right>b.left&&a.top<b.bottom&&a.bottom>b.top;})()"))throw Error('Radio text overlaps vital meters in '+name);}}

@@ -27,6 +27,24 @@ export const WALL_T = 0.25;
 export const DOOR_T = 0.3;
 export const EXT_LIMIT = 60;   // survey perimeter: 120m square; required jobs remain near the hull
 export const FLOOD_MAX = 3.35;
+export const ANNEX_ENTRY = { minZ: -9.4, maxZ: -7.0 };
+export const ANNEX_DIVIDER_X = 20.8;
+export const ANNEX_DECKS = [
+  { cx: 12.9, cz: -8.2, w: 6.2, d: 2.4, label: 'East service corridor' },
+  { cx: 21, cz: -8.2, w: 10, d: 7.6, label: 'Utility annex' }
+];
+export const ANNEX_MACHINERY = [
+  { id: 'compressor', x: 17.7, z: -10.55, w: 1.8, d: 2.1 },
+  { id: 'scrubber', x: 18.3, z: -5.8, w: 2.2, d: 1.9 },
+  { id: 'isolation', x: 22.35, z: -5.8, w: 2.1, d: 1.9 },
+  { id: 'pressure_test', x: 24.25, z: -10.5, w: 2.35, d: 2.05 }
+];
+
+const insideDeck = (x, z, deck, margin = 0) => Math.abs(x - deck.cx) <= deck.w / 2 + margin && Math.abs(z - deck.cz) <= deck.d / 2 + margin;
+export const annexBay = (x, z) => insideDeck(x, z, ANNEX_DECKS[1]) ? (x < ANNEX_DIVIDER_X ? 'compressor' : 'pressure') : null;
+export function insideStation(x, z) {
+  return (Math.abs(x) <= INNER && Math.abs(z) <= INNER) || ANNEX_DECKS.some(deck => insideDeck(x, z, deck));
+}
 
 // ------------------------------------------------------------------ rooms
 export const ROOM_IDS = ["control", "engineering", "medical", "pod"];
@@ -43,6 +61,7 @@ export const ZONE_LABEL = {
 
 // Which room (or "hub" / "exterior") is a point in?
 export function roomAt(x, z) {
+  if (x > INNER && ANNEX_DECKS.some(deck => insideDeck(x, z, deck, .2))) return 'engineering';
   if (Math.abs(x) > HULL_OUT || Math.abs(z) > HULL_OUT) return "exterior";
   if (Math.abs(x) < HUB && Math.abs(z) < HUB) return "hub";
   if (x < 0 && z < 0) return "control";
@@ -50,7 +69,9 @@ export function roomAt(x, z) {
   if (x < 0 && z >= 0) return "medical";
   return "pod";
 }
-export const zoneLabel = (x, z) => ZONE_LABEL[roomAt(x, z)];
+export const zoneLabel = (x, z) => x > INNER && ANNEX_DECKS.some(deck => insideDeck(x, z, deck))
+  ? annexBay(x,z) === 'pressure' ? 'Pressure test bay' : annexBay(x,z) === 'compressor' ? 'Compressor bay' : 'East service corridor'
+  : ZONE_LABEL[roomAt(x, z)];
 
 // Which room does a Leviathan at this angle (atan2(z, x)) hit?
 export function roomAtAngle(angle) {
@@ -95,7 +116,7 @@ export const EXTERIOR_STRUCTURES = [
   {id:'wreck-baffle-b',kind:'wreck',cx:41,cz:5,w:4,d:1,h:2.5}
 ];
 export const EXTERIOR_ROUTES = [
-  {id:'home',label:'STATION LOOP',points:[[-12,5.5],[-18,5.5],[-18,-18],[18,-18],[18,18],[-18,18],[-18,5.5]]},
+  {id:'home',label:'STATION LOOP',points:[[-12,5.5],[-18,5.5],[-18,-16.5],[28,-16.5],[28,18],[-18,18],[-18,5.5]]},
   {id:'garden',label:'WEST / VENT GARDEN',points:[[-18,5.5],[-26,5.5],[-38,5.5],[-38,-12]]},
   {id:'wreck',label:'EAST / SURVEY WRECK',points:[[18,18],[28,18],[38,18],[38,5],[38,-12]]},
   {id:'cleft',label:'NORTH / BASALT CLEFT',points:[[0,-18],[0,-30],[0,-45]]}
@@ -110,12 +131,22 @@ export const WALLS = [
   { cx: 0, cz: -HALF, w: 20.4, d: 0.4 },
   { cx: 0, cz: HALF, w: 20.4, d: 0.4 },
   { cx: -HALF, cz: 0, w: 0.4, d: 20.4 },
-  { cx: HALF, cz: 0, w: 0.4, d: 20.4 },
+  { cx: HALF, cz: 1.6, w: 0.4, d: 17.2 },
   // inner cross walls: four arms that stop at the central hub
   ...[-1, 1].flatMap(sign => [[HUB,4.3],[6.1,INNER]].flatMap(([a,b]) => [
     {cx:0,cz:sign*(a+b)/2,w:WALL_T,d:b-a},
     {cx:sign*(a+b)/2,cz:0,w:b-a,d:WALL_T}
-  ]))
+  ])),
+  { cx: 10, cz: -9.8, w: .4, d: .8 },
+  { cx: 13, cz: -9.55, w: 6, d: .3 },
+  { cx: 13, cz: -6.85, w: 6, d: .3 },
+  { cx: 16, cz: -10.75, w: .3, d: 2.7 },
+  { cx: 16, cz: -5.65, w: .3, d: 2.7 },
+  { cx: 21, cz: -12.12, w: 10.3, d: .24 },
+  { cx: 21, cz: -4.28, w: 10.3, d: .24 },
+  { cx: 26.15, cz: -8.2, w: .3, d: 8 },
+  { cx: ANNEX_DIVIDER_X, cz: -10.57, w: .26, d: 2.86 },
+  { cx: ANNEX_DIVIDER_X, cz: -5.83, w: .26, d: 2.86 }
 ];
 // A physical circulation loop connects all four wings independently of the hub.
 export const SERVICE_PORTALS = [
@@ -200,6 +231,10 @@ export const STATIONS = {
     x: -6, z: 9.55, rot: Math.PI, hold: 6, dept: "medical", requires: ["power"],
     effect: "Enables the oxygen reserve"
   },
+  compressor: { id: 'compressor', kind: 'task', label: 'Intake compressor', room: 'engineering', x: 17.7, z: -9.38, rot: 0, hold: 12, dept: 'engineering', noisy: true, overhaul: true, requires: ['pump'] },
+  scrubber: { id: 'scrubber', kind: 'task', label: 'CO₂ scrubber bank', room: 'engineering', x: 18.3, z: -6.87, rot: Math.PI, hold: 12, dept: 'medical', overhaul: true, requires: ['lifesupport'] },
+  isolation: { id: 'isolation', kind: 'task', label: 'Isolation manifold', room: 'engineering', x: 22.35, z: -6.87, rot: Math.PI, hold: 13, dept: 'command', overhaul: true, requires: ['compressor', 'scrubber', 'console'] },
+  pressure_test: { id: 'pressure_test', kind: 'task', label: 'Launch pressure test', room: 'engineering', x: 24.25, z: -9.35, rot: 0, hold: 16, dept: null, noisy: true, overhaul: true, requires: ['isolation', 'junctions'] },
   o2: {
     id: "o2", kind: "refill", label: "Oxygen reserve", room: "medical",
     x: -8.3, z: 9.55, rot: Math.PI, hold: 5, dept: "medical", requires: ["lifesupport"],
@@ -208,7 +243,7 @@ export const STATIONS = {
   launch: {
     id: "launch", kind: "task", label: "Pod launch console", room: "pod",
     x: 9.55, z: 4.5, rot: -Math.PI / 2, hold: 4, dept: null,
-    requires: ["power", "pump", "console", "lifesupport", "junctions"],
+    requires: ["power", "pump", "console", "lifesupport", "junctions", "pressure_test"],
     effect: "Starts the escape sequence"
   },
   airlock_in: {
@@ -252,12 +287,14 @@ export const SOLIDS = [
   ...WALLS.map((w) => aabb(w.cx, w.cz, w.w, w.d)),
   ...ROOM_PARTITIONS.map(w=>aabb(w.cx,w.cz,w.w,w.d)),
   ...CRATES.map((c) => aabb(c.cx, c.cz, c.w, c.d)),
+  ...ANNEX_MACHINERY.map(m => aabb(m.x, m.z, m.w, m.d)),
   aabb(POD.cx, POD.cz, POD.w, POD.d),
   ...Object.values(STATIONS).filter((s) => !s.exterior).map(stationSolid)
 ];
 // Outside the hull (the whole station is one big solid block)
 export const EXT_SOLIDS = [
   aabb(0, 0, HULL_OUT * 2, HULL_OUT * 2),
+  ...ANNEX_DECKS.map(d => aabb(d.cx, d.cz, d.w + .4, d.d + .4)),
   ...Object.values(STATIONS).filter((s) => s.exterior).map(stationSolid),
   ...EXTERIOR_STRUCTURES.map(s=>aabb(s.cx,s.cz,s.w,s.d)),
   ...EXTERIOR_BOUNDARY.map(s=>aabb(s.cx,s.cz,s.w,s.d))

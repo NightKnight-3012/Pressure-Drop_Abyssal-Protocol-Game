@@ -2,7 +2,8 @@
 export const MISSIONS = {
   blackout: { name: "Blackout", brief: "Restore the station before its emergency reserves fail.", leak: 1, oxygen: 100 },
   pressure: { name: "Pressure surge", brief: "A damaged pump is losing the fight against the ocean.", leak: 1.22, oxygen: 100 },
-  silence: { name: "Silent running", brief: "Low air reserves. Repairs carry further through the hull.", leak: 0.9, oxygen: 78 }
+  silence: { name: "Silent running", brief: "Low air reserves. Repairs carry further through the hull.", leak: 0.9, oxygen: 78 },
+  overhaul: { name: 'Deep overhaul', brief: 'Recommission the east utility annex and certify launch pressure before evacuating.', leak: 0.9, oxygen: 100, overhaul: true }
 };
 export const FINALE_POINTS = {
   board: { x: 7, z: 6.45, label: "Escape pod hatch", room: "pod", rot: Math.PI, kind: "board" },
@@ -12,7 +13,7 @@ export const FINALE_POINTS = {
 export const POD_ROUTE_LENGTH = 210;
 export const POD_DOCKING = { approachAt: 198, tolerance: 0.32, lockSeconds: 3, sealSeconds: 2.4, liftSeconds: 12 };
 export const CAPSULE_STEPS = ["Reconnect the power cell", "Equalize the pressure seal", "Release the damaged hatch"];
-export const REPAIR_TYPES = { power: "circuit", pump: "pressure", console: "routing", lifesupport: "airflow" };
+export const REPAIR_TYPES = { power: "circuit", pump: "pressure", console: "routing", lifesupport: "airflow", compressor: 'pressure', scrubber: 'airflow' };
 export const POD_ACTIONS = ["pilot", "repair", "repairStop", "sonar", "countermeasure", "propose", "accept", "decline"];
 
 export function repairSpec(id, seed = 0) {

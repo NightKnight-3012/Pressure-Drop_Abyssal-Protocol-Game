@@ -16,7 +16,10 @@ export function createStationExterior(scene) {
     for(const x of [sx*3.2,sx*6,sx*8.8])put(new THREE.TorusGeometry(2.82,.1,7,24,Math.PI),[x,4,sz*6],0,[0,Math.PI/2,0]);
     put(new THREE.CylinderGeometry(.8,.9,2.5,16),[sx*8,5.4,sz*8],0);
     put(new THREE.SphereGeometry(.85,16,8,0,Math.PI*2,0,Math.PI/2),[sx*8,6.65,sz*8],1);
-    for(const y of [1,3.2])put(new THREE.BoxGeometry(.18,.18,5.4),[sx*9.9,y,sz*6],2);
+    for(const y of [1,3.2]) {
+      if (sx===1 && sz===-1) put(new THREE.BoxGeometry(.18,.18,3.55),[9.9,y,-5.07],2);
+      else put(new THREE.BoxGeometry(.18,.18,5.4),[sx*9.9,y,sz*6],2);
+    }
     put(new THREE.BoxGeometry(.08,.15,.3),[sx*9.93,3.5,sz*7],3);
   }
   // The broken main lift is visible from the station and explains the ridge route.

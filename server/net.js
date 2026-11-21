@@ -3,7 +3,7 @@
 import crypto from "node:crypto";
 import {isIP} from 'node:net';
 import {
-  MAX_PLAYERS, PLAYER_RADIUS, WALK_SPEED, RUN_SPEED, SWIM_SPEED, INNER, EXT_LIMIT, DEPT_IDS, ROOMS,
+  MAX_PLAYERS, PLAYER_RADIUS, WALK_SPEED, RUN_SPEED, SWIM_SPEED, insideStation, EXT_LIMIT, DEPT_IDS, ROOMS,
   roomAt, pathBlocked, zoneLabel
 } from "../shared/layout.js";
 import {
@@ -431,8 +431,7 @@ export function attachGame(io, { timeScale = 1, log = console,repository=null,li
       const elapsed = Math.min((now - p.lastMove) / 1000, MAX_MOVE_DT);
       const speed = p.exterior ? SWIM_SPEED : running && !p.winded ? RUN_SPEED : WALK_SPEED; // winded = out of stamina
       const tooFar = Math.hypot(x - p.x, z - p.z) > speed * elapsed * SPEED_TOLERANCE + MOVE_SLACK;
-      const limit = p.exterior ? EXT_LIMIT : INNER;
-      const outside = Math.abs(x) > limit || Math.abs(z) > limit;
+      const outside = p.exterior ? Math.abs(x) > EXT_LIMIT || Math.abs(z) > EXT_LIMIT : !insideStation(x, z);
       const closed = closedRooms(game);
       // slightly smaller radius than the client uses, so rounding never rejects honest play
       const blocked = pathBlocked(p.x, p.z, x, z, PLAYER_RADIUS - 0.05, closed, p.exterior);
