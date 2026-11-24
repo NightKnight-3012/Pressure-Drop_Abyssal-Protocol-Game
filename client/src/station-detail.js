@@ -169,10 +169,6 @@ export function createStationDetail(scene) {
     const material=new THREE.MeshBasicMaterial({map:cracks,color:0xb4c7c8,transparent:true,opacity:.3,side:THREE.DoubleSide,depthWrite:false});
     const mesh=new THREE.Mesh(mergeGeometries(geometries),material);mesh.name=`Hull strike scars / ${room}`;mesh.visible=false;root.add(mesh);damage.set(room,mesh);geometries.forEach(g=>g.dispose());
   }
-  const sprayCount=8*32,sprayGeo=new THREE.BufferGeometry();sprayGeo.setAttribute("position",new THREE.BufferAttribute(new Float32Array(sprayCount*3),3));sprayGeo.setDrawRange(0,0);
-  const sprayMat=new THREE.PointsMaterial({map:soft,color:0xd3e8df,size:.065,transparent:true,opacity:.68,depthWrite:false});
-  const spray=new THREE.Points(sprayGeo,sprayMat);spray.name="Breach pressure spray";spray.frustumCulled=false;root.add(spray);
-  let lastSpray=-Infinity,lastSprayKey="",lastReduced=null;
   const dustGeo=new THREE.BufferGeometry(),dustPos=new Float32Array(180*3);
   for(let i=0;i<180;i++){dustPos[i*3]=Math.sin(i*31.7)*6;dustPos[i*3+1]=Math.sin(i*17.3)*2.4;dustPos[i*3+2]=Math.sin(i*11.9)*6;}
   dustGeo.setAttribute("position",new THREE.BufferAttribute(dustPos,3));
@@ -181,19 +177,11 @@ export function createStationDetail(scene) {
     fragmentShader:'uniform vec3 uDirection;uniform float uOn;varying vec3 vRelative;void main(){float d=length(vRelative);float cone=smoothstep(.91,.97,dot(normalize(vRelative),uDirection));float point=1.-smoothstep(.1,.5,length(gl_PointCoord-.5));gl_FragColor=vec4(.75,.84,.79,point*cone*exp(-d*.23)*.24*uOn);}' });
   const dust=new THREE.Points(dustGeo,dustMat);dust.name="Flashlight beam particles";dust.frustumCulled=false;root.add(dust);
 
-  return {root,physicalBounds,signs,damage,spray,dust,
+  return {root,physicalBounds,signs,damage,dust,
     update(state,{time=0,reducedEffects=false,camera=null,flashlightOn=false,quality="balanced"}={}) {
       const powered=state.power && (!state.finale || state.finale.station.power>5);
       materials.screen.emissiveIntensity=powered?.6:.12;poolMat.opacity=powered?.085:.045;
       for(const [room,mesh] of damage){const hits=state.rooms[room]?.impacts||0;mesh.visible=hits>0;mesh.material.opacity=Math.min(.52,.24+hits*.035);}
-      const breaches=state.breaches.slice(0,8),key=breaches.map(b=>b.id).join('|');
-      if(!reducedEffects && time-lastSpray>=.1 || key!==lastSprayKey || reducedEffects!==lastReduced) {
-        const p=sprayGeo.attributes.position;let at=0;
-        for(const b of breaches){const r=ROOMS[b.room]||ROOMS.control,dx=r.sx*5-b.x,dz=r.sz*5-b.z,len=Math.hypot(dx,dz)||1;
-          for(let j=0;j<32;j++){const phase=((reducedEffects?0:time*.8)+j*.6180339)%1,spread=Math.sin(j*13.7)*.12;
-            p.setXYZ(at++,b.x+dx/len*phase*1.7+spread*phase,Math.max(.04,1.2-phase*phase*1.35)+spread*.3,b.z+dz/len*phase*1.7+Math.cos(j*19)*.1*phase);}}
-        sprayGeo.setDrawRange(0,at);p.needsUpdate=true;lastSpray=time;lastSprayKey=key;lastReduced=reducedEffects;
-      }
       dust.visible=!!camera && flashlightOn && !reducedEffects;
       if(dust.visible){dust.position.copy(camera.position);camera.getWorldDirection(dustMat.uniforms.uDirection.value);dustMat.uniforms.uOn.value=1;dustMat.uniforms.uTime.value=time;dustGeo.setDrawRange(0,quality==="low"?60:quality==="high"?180:120);}
     },

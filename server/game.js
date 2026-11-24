@@ -645,7 +645,16 @@ export function tickGame(game, players, nowMs = Date.now(), timeScale = 1) {
   const T = TUNING;
   const byId = new Map(players.map((p) => [p.id, p]));
   if(game.practice){game.oxygen=100;game.lev.threat=0;game.lev.state='patrol';for(const r of ROOM_IDS)game.rooms[r].flood=Math.min(.7,game.rooms[r].flood);for(const p of players)p.suit=Math.max(20,p.suit);if(game.finale){game.finale.pod.hull=Math.max(50,game.finale.pod.hull);game.finale.pod.oxygen=Math.max(60,game.finale.pod.oxygen);}}
-  for(const p of players){if(!p.exterior||p.subSeat){p.depth=0;p.vertical=0;}else if(isActive(p)){const direction=game.time<p.verticalUntil?p.vertical:0;p.depth=clamp((p.depth||0)+direction*DIVE_SPEED*dt,0,maximumDive(p.x,p.z));}}
+  for(const p of players){
+    if(!p.exterior||p.subSeat){p.depth=0;p.vertical=0;p.diveVelocity=0;continue;}
+    if(!isActive(p)){p.diveVelocity=0;continue;}
+    const target=game.time<p.verticalUntil?p.vertical*DIVE_SPEED:0;
+    const speed=p.diveVelocity??0;
+    p.diveVelocity=target+(speed-target)*Math.exp(-8*dt);
+    const limit=maximumDive(p.x,p.z);
+    p.depth=clamp((p.depth||0)+p.diveVelocity*dt,0,limit);
+    if((p.depth===0 && p.diveVelocity<0)||(p.depth===limit && p.diveVelocity>0)) p.diveVelocity=0;
+  }
   const vehicle=tickSub(game,players,dt);events.push(...vehicle.events);for(const hit of vehicle.hits){const p=byId.get(hit.id);if(p&&isActive(p))damage(p,hit.amount,game,events);}
 
   if(game.salvage.state==='carried' && byId.get(game.salvage.carrier)?.lost) {

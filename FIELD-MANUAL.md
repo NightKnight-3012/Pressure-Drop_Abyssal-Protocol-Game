@@ -401,7 +401,7 @@ Escape corridor refinement: paired reflective dashes follow the shared route ben
 
 Audio mix refinement: non-positional suit warnings, radio-chat cues and sonar readouts use a clear communications path controlled by Effects volume; positional creature and machinery sounds keep underwater filtering. Important warnings ease propulsion and water-rush levels back temporarily, alongside ambience, then recover automatically. Overlapping warning windows cannot shorten each other. Initial audio unlock now respects the current EVA/underwater environment. Captions, master mute, hidden-tab muting and existing volume controls remain available. This changes mixing of the local authored bank, without adding spoken voice lines or external audio.
 
-Work alignment: reachable equipment uses surface contact and two-bone arm IK; distant work retains bounded camera-relative poses. Looking away from the target or opening the wrist computer hides the hands. This is presentation only; server holds still determine progress and completion.
+Hold the interaction key to lean toward an instrument or kneel over a floor leak. The free hand braces against the surface while the working hand places the tool. Release to return to your usual view. The server uses your standing position to validate the repair.
 
 Control guidance now follows saved key bindings in the suit HUD, pause and briefing hints, current objectives and survey-sub help. Swapped keys are substituted once, and reset restores original labels while preserving hint formatting. World-mounted signs may still show default controls.
 

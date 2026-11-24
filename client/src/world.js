@@ -11,6 +11,7 @@ import { createOcean, oceanHeight } from "./ocean.js";
 import { createWreckage } from "./wreckage.js";
 import { createEscapeCraft, fitEscapeCraft } from "./escape-craft.js";
 import { createStationDetail, ROOM_LIGHT_COLORS } from "./station-detail.js";
+import { addFloodFlow } from './flood-flow.js';
 import { createLightScattering } from "./light-scattering.js";
 import { createPowerUnit } from "./power-unit.js";
 import { addUtilityAnnex } from './utility-annex.js';
@@ -306,7 +307,7 @@ export function buildWorld(scene) {
     for (const l of lights) {
       if (now > l.flickerUntil && Math.random() < chance) l.flickerUntil = now + 50 + Math.random() * 160;
       const flickering = !reduced && now < l.flickerUntil;
-      const brightness = l.room === 'engineering' ? (power ? 17 : 8) : (power ? 14 : 6.5);
+      const brightness = l.room === 'engineering' ? (power ? 14 : 4.8) : (power ? 12 : 4);
       l.light.intensity = brightness * (flickering ? 0.65 : 1 - t * 0.18);
       const room = l.room;
       const isolated=room&&(state.roomCircuits?.[room]===false||state.empRooms?.[room]>state.t);
@@ -345,57 +346,36 @@ export function buildWorld(scene) {
   }
   planes.hub = [waterPlane(0, 0, HUB * 2, HUB * 2)];
   for (const {cx,cz,w,d} of ANNEX_DECKS) planes.engineering.push(waterPlane(cx,cz,w,d));
-  function setLevel(list, level, t) {
-    for (const m of list) { m.visible = level > 0.02; m.position.y = level + Math.sin(t * 1.6 + m.position.x) * 0.012; }
+  function setLevel(list, level, heave) {
+    for (const m of list) { m.visible = level > 0.02; m.position.y = level + heave; }
   }
 
   // ================================================================ breaches
   const ringGeo = new THREE.RingGeometry(0.35, 0.5, 20);
   const ringMat = new THREE.MeshBasicMaterial({ color: 0xff5364, side: THREE.DoubleSide });
   const breaches = new Map();
-  const sprayPositions = new Float32Array(8 * 12 * 3);
-  const sprayGeometry = new THREE.BufferGeometry();
-  const sprayAttribute = new THREE.BufferAttribute(sprayPositions, 3).setUsage(THREE.DynamicDrawUsage);
-  sprayGeometry.setAttribute('position', sprayAttribute);
-  sprayGeometry.setDrawRange(0, 0);
-  const spray = new THREE.Points(sprayGeometry, new THREE.PointsMaterial({color:0xa9dce9,map:glow,size:.12,transparent:true,opacity:.62,depthWrite:false}));
-  spray.frustumCulled = false;
-  scene.add(spray);
+  const floodFlow = addFloodFlow(scene);
 
-  function syncBreaches(list, t, reduced) {
+  function syncBreaches(list) {
     const seen = new Set();
-    const droplets = reduced ? 0 : Math.ceil(12 * QUALITY[options.quality].particles);
-    let count = 0;
     for (const b of list) {
       seen.add(b.id);
       let v = breaches.get(b.id);
       if (!v) {
         const group = new THREE.Group();
-        const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: glow, color: 0x9de8ff, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false }));
-        sprite.position.y = 0.3; sprite.scale.set(2.2, 2.2, 1);
         const mark = new THREE.Mesh(ringGeo, ringMat);
         mark.rotation.x = -Math.PI / 2; mark.position.y = 0.05;
-        group.add(sprite, mark);
+        group.add(mark);
         group.position.set(b.x, 0, b.z);
         scene.add(group);
-        v = { group, sprite, seed: Math.random() * 6 };
+        v = { group };
         breaches.set(b.id, v);
-      }
-      v.sprite.material.opacity = reduced ? 0.5 : 0.5 + Math.sin(t * 3 + v.seed) * 0.1;
-      const room = ROOMS[b.room];
-      if (!room || count + droplets > sprayAttribute.count) continue;
-      for (let i = 0; i < droplets; i++) {
-        const age = (t * 1.7 + i / droplets + v.seed) % 1;
-        const fan = Math.sin(i * 7.31) * age * .48;
-        sprayAttribute.setXYZ(count++, b.x - room.sx * age * .66 + fan, .24 + .92 * age * (1 - age), b.z - room.sz * age * .66 - fan);
       }
     }
     for (const [id, v] of breaches) {
       if (seen.has(id)) continue;
-      scene.remove(v.group); v.sprite.material.dispose(); breaches.delete(id);
+      scene.remove(v.group); breaches.delete(id);
     }
-    sprayGeometry.setDrawRange(0, count);
-    if (count) sprayAttribute.needsUpdate = true;
   }
 
   // ================================================================ the ocean outside + the Leviathan
@@ -452,7 +432,6 @@ export function buildWorld(scene) {
 
   // ================================================================ per-frame update from server state
   function update(state, ctx) {
-    subView.update(state.sub,ctx.dt,ctx.selfId);
     threatView.update(state,ctx.viewer);
     storyView.update(state.story);
     resourceView.update([...(state.resources||[]),...(state.scrap||[]),...(state.stage==='main'?state.drops||[]:[]),...(state.stage==='main'&&state.salvage?.state==='available'?[{...SALVAGE,item:'regulator',id:SALVAGE.recover}]:[])]);
@@ -501,14 +480,16 @@ export function buildWorld(scene) {
         m.material.emissiveIntensity = r.locked ? 0.9 + (reducedEffects ? 0 : Math.sin(time * 6) * 0.4) : 0.6;
       }
     }
-    for (const room of ROOM_IDS) setLevel(planes[room], state.rooms[room].flood, time);
-    setLevel(planes.hub, state.hub, time);
+    const waterHeave = reducedEffects ? 0 : Math.sin(time*1.6)*.012;
+    for (const room of ROOM_IDS) setLevel(planes[room], state.rooms[room].flood, waterHeave);
+    setLevel(planes.hub, state.hub, waterHeave);
     waterMat.opacity = 0.4 + Math.min(0.15, state.hub * 0.05);
     const launch = state.stations.launch;
     const ready = launch === "ready" || launch === "done" || state.stage === "boarding";
     podDoorMat.color.setHex(ready ? 0x4dff9a : 0xff5a4a);
     podDoorMat.emissive.setHex(ready ? 0x12b85a : 0xff2a1a);
-    syncBreaches(state.breaches, time, reducedEffects);
+    syncBreaches(state.breaches);
+    floodFlow.update(state, time, reducedEffects, options.quality, waterHeave);
     updateLeviathan(state.lev, time, dt, reducedEffects);
     updateLights(state.lev.threat, alert, now, reducedEffects,state);
     const pos = snow.geometry.attributes.position;
@@ -558,5 +539,9 @@ export function buildWorld(scene) {
     if(normal.dot(origin.clone().sub(hit.point))<0)normal.negate();
     return {point:hit.point,normal};
   }
-  return { update, dispose, setTarget,workSurface };
+  function updateSub(state,dt,selfId) {
+    subView.update(state,dt,selfId);
+    return subView.root;
+  }
+  return { update, updateSub, dispose, setTarget,workSurface };
 }

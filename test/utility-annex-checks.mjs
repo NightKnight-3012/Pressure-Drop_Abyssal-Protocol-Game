@@ -7,6 +7,7 @@ import {addUtilityAnnex} from '../client/src/utility-annex.js';
 import {objectiveFor} from '../client/src/objectives.js';
 
 const jobs = ['compressor','scrubber','isolation','pressure_test'];
+assert.deepEqual(jobs.map(id=>STATIONS[id].hold),[STATIONS.pump.hold,STATIONS.lifesupport.hold,STATIONS.console.hold,8]);
 const front = ({x,z,rot}) => ({x:x + Math.sin(rot)*1.3, z:z + Math.cos(rot)*1.3});
 const stations = jobs.map(id => front(STATIONS[id]));
 const path = [{x:8,z:-8.2},{x:13,z:-8.2},{x:17,z:-8.2},{x:21.4,z:-8.2},{x:25,z:-8.2}];

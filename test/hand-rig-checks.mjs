@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import {solveArm,cameraContact} from '../client/src/hand-rig.js';
+import {solveArm,cameraContact,frameRepair} from '../client/src/hand-rig.js';
 import {createWorkHands,workPose} from '../client/src/work-hands.js';
 let checks=0;const check=(name,fn)=>{fn();checks++;console.log('PASS '+name);};
 const base={working:true,player:{},hold:{id:'power',progress:.4}};
@@ -9,6 +9,23 @@ check('two-bone solver keeps both segment lengths and rejects unreachable target
 check('contact conversion follows actual camera yaw, pitch, roll and FOV',()=>{const camera=new THREE.PerspectiveCamera(83,16/9,.1,100);camera.position.set(5,1.65,-2);camera.rotation.set(.2,.6,.1);camera.updateMatrixWorld(true);const point=contact.point.clone().applyMatrix4(camera.matrixWorld),normal=contact.normal.clone().transformDirection(camera.matrixWorld);const c=cameraContact({point,normal},camera);assert(c.point.distanceTo(contact.point)<1e-9);assert(c.normal.distanceTo(contact.normal)<1e-9);assert.equal(c.fov,83);assert.equal(cameraContact({point:new THREE.Vector3(NaN,0,0),normal},camera),null);});
 const view=createWorkHands(),renderer={autoClear:true,clearDepth(){},render(){}};
 try{
+ check('repairs from either end of interaction range settle onto the floor or panel',()=>{
+   for(const distance of [.05,.5,1.5,2.24])for(const floor of [true,false])for(const reduced of [true,false]){
+     const camera=new THREE.PerspectiveCamera(75,16/9,.1,140);
+     const stance={offset:new THREE.Vector3(),yaw:0,pitch:0};
+     const surface={point:new THREE.Vector3(0,floor?.05:1.2,0),normal:new THREE.Vector3(0,floor?1:0,floor?0:1)};
+     for(let i=0;i<60;i++){
+       camera.position.set(distance*.45,1.65,distance*.88);camera.rotation.set(.1,.2,0,'YXZ');
+       frameRepair(camera,surface,stance,1/60,reduced);
+     }
+     const c=cameraContact(surface,camera);
+     const pose=workPose({...base,hold:{id:floor?'breach:x':'compressor',tool:floor?'welder':null,progress:.5},contact:c});
+     for(let i=0;i<20;i++)view.update(pose,1/60,reduced);
+     assert(view.contactActive);
+     const tip=floor?new THREE.Vector3(0,.015,-.346).applyEuler(view.welder.rotation):new THREE.Vector3(-.038,.233,-.254);
+     assert(view.right.localToWorld(tip).distanceTo(view.contactPoints.right)<1e-6);
+   }
+ });
  check('each glove has independently articulated fingers and an opposable thumb in one draw',()=>{assert.equal(view.fingers.mesh.count,28);for(const rig of [view.leftFingers,view.rightFingers]){assert.deepEqual(rig.fingers.map(f=>f.joints.length),[3,3,3,3,2]);assert.notEqual(rig.fingers[4].joints[0].rotation.y,0);}view.update(workPose(base),.1);const angles=view.rightFingers.fingers.map(f=>f.joints[1].rotation.x);assert(new Set(angles).size>2);const old=angles[0];view.update(workPose(base),.1);assert.notEqual(view.rightFingers.fingers[0].joints[1].rotation.x,old);});
  check('reachable wrench head and supporting fingertips contact the actual surface at every viewport width',()=>{for(const aspect of [16/9,520/640]){view.update(workPose({...base,contact}),.1,true);assert(view.contactActive);view.render(renderer,aspect);view.scene.updateMatrixWorld(true);const head=view.right.localToWorld(new THREE.Vector3(-.038,.233,-.254)),palm=view.left.localToWorld(view.fingers.tip(view.leftFingers,1));assert(head.distanceTo(view.contactPoints.right)<1e-7);assert(palm.distanceTo(view.contactPoints.left)<1e-7);assert.equal(view.camera.fov,75);assert.equal(view.root.scale.x,1);}});
  check('welding tip and pointing fingertip use separate surface anchors',()=>{for(const [id,tool,kind] of [['breach:x','welder','weld'],['door_control',null,'controls']]){view.update(workPose({...base,hold:{id,tool,progress:.4},contact}),.1,true);view.render(renderer,16/9);assert(view.contactActive);const offset=kind==='weld'?new THREE.Vector3(0,.015,-.346).applyEuler(view.welder.rotation):view.fingers.tip(view.rightFingers);const tip=view.right.localToWorld(offset);assert(tip.distanceTo(view.contactPoints.right)<1e-7);assert(tip.z>contact.point.z);}});

@@ -6,7 +6,7 @@ import { createModelLibrary } from "./models.js";
 import { createSurfaces } from "./surfaces.js";
 import { options, QUALITY } from "./options.js";
 import { createPodSound, sfx } from "./audio.js";
-import { POD_VISUAL_SCALE, podMotionTarget } from "./pod-motion.js";
+import { POD_VISUAL_SCALE, podMotionTarget, updatePodTravel } from "./pod-motion.js";
 import { POD_ROUTE_LENGTH } from "../../shared/tactical.js";
 import { createSeabed } from "./ocean.js";
 import { createWreckage } from "./wreckage.js";
@@ -18,13 +18,15 @@ import {createCollapseSection,collapsePose} from './collapse-section.js';
 export function createPodView() {
   const surfaces = createSurfaces(); let time = 0;
   const sound = createPodSound(); let progress = null, lane = 0, velocity = 0, kick = 0, previousHull = null, wasBoosting = false, lastPass = -10;
+  const travelView = {};
   const scene = new THREE.Scene(); scene.background = new THREE.Color(0x020d16); scene.fog = new THREE.Fog(0x020d16, 15, 220);
   const camera = new THREE.PerspectiveCamera(68, innerWidth / innerHeight, 0.1, 400);
   camera.rotation.order = "YXZ";
   const aim = new THREE.Object3D(); aim.rotation.order = "YXZ";
-  let lift = 0;
-  scene.add(new THREE.HemisphereLight(0x6a8f9b, 0x142731, 1.65));
-  const lamp = new THREE.SpotLight(0xbed9d8, 155, 220, 0.65, 0.6, 1);
+  let lift = 0, previousPhase = null;
+  const ambient = new THREE.HemisphereLight(0x6a8f9b, 0x142731, .72);
+  scene.add(ambient);
+  const lamp = new THREE.SpotLight(0xbed9d8, 155, 220, .73, .7, 1);
   camera.add(lamp); lamp.target.position.set(0, 0, -30); camera.add(lamp.target); scene.add(camera);
   const cockpit = new THREE.Group(); camera.add(cockpit);
   const metal = new THREE.MeshStandardMaterial({ color: 0x344951, map: surfaces.metal, roughness: 0.48, metalness: 0.5 });
@@ -70,14 +72,22 @@ export function createPodView() {
       if (!finale) return;
       const pod = finale.pod;
       const sealing = pod.phase === "sealing", ascending = pod.phase === "ascent";
+      if (audible && previousPhase && previousPhase!==pod.phase) {
+        if(sealing)sfx.cradleCapture();
+        if(ascending)sfx.liftLoad();
+      }
+      previousPhase=pod.phase;
       const showRear = !ascending && (rear || sealing && !reduced);
       const motion = podMotionTarget(pod, reduced, showRear), k = 1 - Math.exp(-12 * dt);
       if (audible && motion.boost && !wasBoosting) sfx.podBoost();
       wasBoosting = audible && motion.boost;
-      progress ??= pod.progress; progress += (pod.progress - progress) * k;
+      progress = updatePodTravel(travelView,pod,dt);
       // Near the lift the bulkhead fills the windscreen. Dip the bow lamp over
       // the last metres so pilots can distinguish the cradle marks from glare.
-      lamp.intensity = 155 - 105 * THREE.MathUtils.smoothstep(progress, POD_ROUTE_LENGTH-8, POD_ROUTE_LENGTH);
+      const approachDarkness = THREE.MathUtils.smoothstep(progress,POD_ROUTE_LENGTH-17,POD_ROUTE_LENGTH-5);
+      ambient.intensity = ascending ? .72 : .72 - .45*approachDarkness;
+      const dockingFade = THREE.MathUtils.smoothstep(progress,POD_ROUTE_LENGTH-8,POD_ROUTE_LENGTH);
+      lamp.intensity = 155 - 64*approachDarkness - 67*dockingFade;
       const track=routeFrame(progress);corridor.update(progress);corridor.root.visible=!ascending;
       const oldLane = lane; lane += (pod.lane - lane) * k;
       velocity += (((lane - oldLane) / Math.max(dt, 0.001)) - velocity) * k;
@@ -87,9 +97,10 @@ export function createPodView() {
       time += dt; surfaces.update(time, reduced);
       particleGeo.setDrawRange(0, Math.floor(480 * QUALITY[options.quality].particles));
       if (!reduced) { for (let i = 2; i < particles.length; i += 3) { particles[i] += dt * motion.travelSpeed; if (particles[i] > 25) particles[i] -= 100; } particleGeo.attributes.position.needsUpdate = true; }
-      lift += ((ascending ? pod.ascentProgress * 35 : 0) - lift) * (1 - Math.exp(-4 * dt));
+      const rise=ascending?THREE.MathUtils.smoothstep(pod.ascentProgress,.055,1)*35:0;
+      lift += (rise - lift) * (1 - Math.exp(-4 * dt));
       extraction.position.set(0, -lift, 12 - (POD_ROUTE_LENGTH - progress) * POD_VISUAL_SCALE);
-      recovery.update(ascending ? 1 : sealing ? pod.sealProgress : 0, sealing || ascending ? 1 : pod.dockProgress || 0,lift);
+      recovery.update(ascending ? 1 : sealing ? pod.sealProgress : 0, sealing || ascending ? 1 : pod.dockProgress || 0,lift,progress);
       floor.visible = !ascending;
       streaks.visible = !reduced && motion.speed > 0;
       streakGeo.setDrawRange(0, Math.floor(100 * QUALITY[options.quality].particles) * 2);
@@ -100,6 +111,8 @@ export function createPodView() {
       }
       streakGeo.attributes.position.needsUpdate = true;
       camera.position.set(track.x+lane * 4, track.y, 8);
+      if(!reduced && sealing)camera.position.y-=.18*THREE.MathUtils.smoothstep(pod.sealProgress,0,.22);
+      if(!reduced && ascending)camera.position.y-=.18*(1-THREE.MathUtils.smoothstep(pod.ascentProgress,.035,.12));
       aim.rotation.set(ascending ? 0.22 : track.pitch-.006, showRear ? Math.PI+track.yaw : track.yaw+(reduced ? 0 : -velocity * 0.006), 0);
       camera.quaternion.slerp(aim.quaternion, 1 - Math.exp(-(sealing || ascending ? 4 : rear ? 8 : 12) * dt));
       if (!reduced && !showRear && !ascending && !sealing) {

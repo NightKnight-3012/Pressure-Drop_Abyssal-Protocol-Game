@@ -142,10 +142,13 @@ export function tickFinale(game, players, dt, events) {
     pod.battery = clamp(pod.battery + dt * (boost ? -17 : 5), 0, 100);
     const cruising = (1.2 + (stale ? 0.65 : pod.input.throttle) * 1.6 + (boost ? 1.6 : 0)) * (game.time < pod.distractedUntil ? 0.7 : 1);
     const approachSpeed = 0.65 + 1.8 * clamp((POD_ROUTE_LENGTH - pod.progress) / 12, 0, 1);
-    pod.speed = clamped || pod.phase === "rendezvous" ? 0 : pod.phase === "approach" ? Math.min(cruising, approachSpeed) : cruising;
+    const targetSpeed = pod.phase === "approach" ? Math.min(cruising, approachSpeed) : cruising;
+    const braking = !stale && pod.input.throttle <= .45 && !boost;
+    const acceleration = targetSpeed > pod.speed ? (boost ? 3.8 : 3.3) : braking || pod.phase === "approach" ? 2.8 : 1.4;
+    pod.speed = clamped || pod.phase === "rendezvous" ? 0 : pod.speed + clamp(targetSpeed - pod.speed, -acceleration*dt, acceleration*dt);
     const steering = clamped || stale ? 0 : pod.input.steer;
     const lateralTarget = steering * (pod.phase === "rendezvous" ? 0.65 : 1.4);
-    pod.lateralSpeed += (lateralTarget - pod.lateralSpeed) * (1 - Math.exp(-12 * dt));
+    pod.lateralSpeed += (lateralTarget - pod.lateralSpeed) * (1 - Math.exp(-(pod.phase === "rendezvous" ? 12 : 7) * dt));
     pod.lane = clamp(pod.lane + pod.lateralSpeed * dt, -1.2, 1.2);
     if (clamped || pod.phase === "rendezvous" && Math.abs(pod.lane) < 0.16 && Math.abs(steering) < 0.1) pod.lane *= Math.exp(-4 * dt);
     pod.progress = Math.min(POD_ROUTE_LENGTH, pod.progress + pod.speed * dt);
@@ -163,7 +166,7 @@ export function tickFinale(game, players, dt, events) {
     }
     for (const gate of pod.route) if (!gate.passed && pod.progress >= gate.at) {
       gate.passed = true;
-      if (Math.abs(pod.lane - gate.lane) < 0.52) { pod.hull -= boost ? 22 : 14; events.push({ type: "podCollision", lane: gate.lane }); }
+      if (Math.abs(pod.lane - gate.lane) < 0.52) { pod.hull -= 14 + 8 * clamp((pod.speed - 2.8) / 1.6,0,1); events.push({ type: "podCollision", lane: gate.lane }); }
     }
     for (const [id, repair] of Object.entries(pod.repairs)) {
       const p = crew.find(q => q.id === id);
@@ -226,7 +229,9 @@ export function tickFinale(game, players, dt, events) {
     events.push({ type: "pursuit", target: desired });
   }
   if (pod.status === "running" && pod.phase !== "ascent") {
-    pod.creatureDistance = clamp(pod.creatureDistance + dt * (monster.target === "station" || game.time < pod.distractedUntil ? 3.2 : -2.2), 4, 65);
+    const diverted = monster.target === "station" || game.time < pod.distractedUntil;
+    const separationRate = diverted ? 3.2 : -2.2 + 2.5 * Math.max(0, pod.speed - 2.8);
+    pod.creatureDistance = clamp(pod.creatureDistance + dt * separationRate, 4, 65);
     if (monster.target === "pod" && pod.creatureDistance < 9 && game.time >= pod.strikeAt && game.time >= pod.distractedUntil) {
       pod.hull -= 14; pod.strikeAt = game.time + 9; events.push({ type: "podStrike" });
     }

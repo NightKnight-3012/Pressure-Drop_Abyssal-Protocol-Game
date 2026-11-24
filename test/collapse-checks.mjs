@@ -10,5 +10,16 @@ check('three authored silhouettes fit one blocked lane, use two draws, no lights
 check('essential fall is deterministic, monotonic and settled before collision',()=>{let old=8;for(let ahead=15;ahead>=0;ahead-=.1){const p=collapsePose(ahead);assert(p.height<=old+1e-9);old=p.height;assert.equal(p.height,collapsePose(ahead,true).height);assert.equal(collapsePose(ahead,true).roll,0);}assert.equal(collapsePose(4).height,0);assert(Math.abs(collapsePose(0).roll)<1e-9);});
 check('warnings find an upcoming collapse behind an earlier ordinary obstacle',()=>{const route=createRoute(()=>.5);assert.equal(approachingCollapse(route,29).at,42);assert.equal(approachingCollapse(route,28.9),null);route[2].passed=true;assert.equal(approachingCollapse(route,40),null);assert.equal(collapseLabel(138),'SURVEY CONDUIT');});
 check('all crew sizes receive one server-owned telegraph with time to steer',()=>{for(let n=1;n<=8;n++){const s=setup(n),events=[];s.pod.progress=28.5;tickFinale(s.game,s.players,.05,events);assert.equal(events.filter(e=>e.type==='podCollapse').length,0);s.pod.progress=29.1;tickFinale(s.game,s.players,.05,events);assert.equal(events.filter(e=>e.type==='podCollapse').length,1);tickFinale(s.game,s.players,.05,events);assert.equal(events.filter(e=>e.type==='podCollapse').length,1);assert(s.pod.route[0].warned);assert.equal(finaleSnapshot(s.game,s.players).pod.route[0].warned,true);assert(13/4.4>2.9);}});
-check('authored set pieces retain original authoritative damage and two clear lanes',()=>{for(const lane of [-1,0,1])for(const boost of [false,true]){const s=setup(),events=[];s.pod.progress=41.99;s.pod.lane=lane;s.pod.input.boost=boost;tickFinale(s.game,s.players,.05,events);assert.equal(s.pod.hull,lane===0?(boost?78:86):100);assert.equal(events.filter(e=>e.type==='podCollision').length,lane===0?1:0);assert(s.pod.route[0].passed);}});
+check('authored set pieces damage the blocked lane according to actual impact speed',()=>{
+  for(const lane of [-1,0,1])for(const speed of [2.8,4.4]){
+    const s=setup(),events=[];
+    Object.assign(s.pod,{progress:41.99,lane,speed});
+    Object.assign(s.pod.input,{throttle:1,boost:false});
+    tickFinale(s.game,s.players,.05,events);
+    if(lane===0 && speed>2.8)assert(s.pod.hull>78 && s.pod.hull<79);
+    else assert.equal(s.pod.hull,lane===0?86:100);
+    assert.equal(events.filter(e=>e.type==='podCollision').length,lane===0?1:0);
+    assert(s.pod.route[0].passed);
+  }
+});
 console.log(`${checks} collapse checks passed`);

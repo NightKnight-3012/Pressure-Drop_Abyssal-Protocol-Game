@@ -1,5 +1,6 @@
 import { options, onOptionsChange } from "./options.js";
 import { SOUNDS } from "./sound-catalog.js";
+import { roomAt } from "../../shared/layout.js";
 
 let ctx=null, master=null, effects=null, ambience=null, communications=null, muffler=null, captionSink=null;
 const SUIT_CUES=new Set(['alarm','warning','lowAir','down','launch','chat','sonarPing']);
@@ -7,6 +8,8 @@ let loadTask=null, threat=0, duckUntil=0, environment={active:false,outside:fals
 const buffers=new Map(), voices=new Set(), beds=new Map(), cooldowns=new Map(), podMixes=new Set();
 let listenerPosition={x:0,z:0}, listenerYaw=0, stepDistance=0, stepIndex=0;
 let contactPosition=null, contactState=null, hushUntil=0, nextCallAt=0;
+const crewSteps=new Map();
+let lastCrewFrame, lastCrewListener;
 const clamp=(v,a=0,b=1)=>Number.isFinite(v)?Math.max(a,Math.min(b,v)):a;
 const targets=new WeakMap();
 const gainTo=(node,value,seconds=.15)=>{if(node && targets.get(node)!==value) {targets.set(node,value);node.gain.setTargetAtTime(value,ctx.currentTime,seconds);}};
@@ -36,6 +39,8 @@ export function setCaptionSink(fn) {
     for(const pod of podMixes) pod.dispose();
     for(const bed of beds.values()) gainTo(bed.gain,0,.12);
     cooldowns.clear();duckUntil=0;
+    crewSteps.clear();
+    lastCrewFrame=null;
   }
 }
 export function unlockAudio() {
@@ -76,7 +81,13 @@ export function preloadAudio() {
 function stopVoice(voice) {
   if(voice.closed) return;voice.closed=true;
   try {voice.source.stop();} catch {}
-  voice.source.disconnect();voice.gain.disconnect();voice.panner?.disconnect();voices.delete(voice);
+  voice.source.disconnect();voice.gain.disconnect();voice.panner?.disconnect();voice.filter?.disconnect();voices.delete(voice);
+}
+function obstruction(name,position) {
+  if(!environment.rooms || environment.pod || environment.surface) return 6500;
+  const from=roomAt(position.x,position.z), to=roomAt(listenerPosition.x,listenerPosition.z);
+  if(from===to || !(environment.rooms[from]?.closed || environment.rooms[to]?.closed)) return 6500;
+  return name==='impact'||name==='hullGroan' ? 1450 : 650;
 }
 function play(name,position,volume=1,rate=1) {
   const spec=SOUNDS[name], buffer=buffers.get(name);
@@ -90,13 +101,16 @@ function play(name,position,volume=1,rate=1) {
   cooldowns.set(name,now);
   const source=ctx.createBufferSource(), gain=ctx.createGain();source.buffer=buffer;source.playbackRate.value=clamp(rate,.75,1.3);gain.gain.value=spec.gain*clamp(volume,0,1.5);
   source.connect(gain);
-  let panner;
+  let panner, filter;
   if(position && Number.isFinite(position.x) && Number.isFinite(position.z)) {
     panner=ctx.createPanner();panner.panningModel="HRTF";panner.distanceModel="inverse";panner.refDistance=7;panner.maxDistance=65;panner.rolloffFactor=.7;
     panner.positionX.value=position.x;panner.positionY.value=2;panner.positionZ.value=position.z;
-    gain.connect(panner);panner.connect(effects);
+    filter=ctx.createBiquadFilter();
+    filter.type="lowpass";
+    filter.frequency.value=obstruction(name,position);
+    gain.connect(panner);panner.connect(filter);filter.connect(effects);
   } else gain.connect(SUIT_CUES.has(name)?communications:effects);
-  const voice={source,gain,panner,name,priority:spec.priority||0};voices.add(voice);source.onended=()=>stopVoice(voice);source.start();
+  const voice={source,gain,panner,filter,name,priority:spec.priority||0};voices.add(voice);source.onended=()=>stopVoice(voice);source.start();
   if((spec.priority||0)>=2||name==='launch')duckUntil=Math.max(duckUntil,now+Math.min(3,spec.seconds));
   else if(name==='chat')duckUntil=Math.max(duckUntil,now+.45);
 }
@@ -140,7 +154,38 @@ export function setAudioEnvironment(value) {
   environment={...environment,...value};
   const isMuffled=environment.outside||environment.underwater;
   if(muffler && wasMuffled!==isMuffled) muffler.frequency.setTargetAtTime(isMuffled?1800:6500,ctx.currentTime,.4);
+  for(const voice of voices) if(voice.filter) {
+    const cutoff=obstruction(voice.name,{x:voice.panner.positionX.value,z:voice.panner.positionZ.value});
+    if(voice.cutoff!==cutoff){
+      voice.cutoff=cutoff;
+      voice.filter.frequency.setTargetAtTime(cutoff,ctx.currentTime,.14);
+    }
+  }
   updateBeds();
+}
+export function updateCrewSteps(players, selfId, rooms) {
+  if(!environment.active || !options.sound || environment.pod || environment.outside){
+    crewSteps.clear();lastCrewFrame=null;return;
+  }
+  if(lastCrewFrame===players && lastCrewListener===selfId)return;
+  if(lastCrewListener!==selfId)crewSteps.clear();
+  lastCrewFrame=players;lastCrewListener=selfId;
+  const nearby=new Set();
+  for(const p of players){
+    if(p.id===selfId||p.ext||p.down||p.lost||p.aboard||p.escaped||Math.hypot(p.x-listenerPosition.x,p.z-listenerPosition.z)>10)continue;
+    nearby.add(p.id);
+    const last=crewSteps.get(p.id);
+    if(!last){crewSteps.set(p.id,{x:p.x,z:p.z,distance:0});continue;}
+    const travel=Math.hypot(p.x-last.x,p.z-last.z);
+    last.x=p.x;last.z=p.z;
+    if(travel>2.5){last.distance=0;continue;}
+    last.distance+=travel;
+    if(last.distance<1.5)continue;
+    last.distance%=1.5;
+    const wet=(rooms[roomAt(p.x,p.z)]?.flood??0)>.12;
+    play(wet?"wetStep":"step2",p,p.run?.68:.35);
+  }
+  for(const id of crewSteps.keys())if(!nearby.has(id))crewSteps.delete(id);
 }
 export function updateMovementAudio(distance,{active=true,running=false,swimming=false,wet=false}={}) {
   if(!active || !environment.active) {stepDistance=0;return;}
@@ -194,6 +239,8 @@ export const sfx={
     const c=cues[item];if(c)cue(c[0],c[1],position);
   },
   podBoost:()=>cue("podBoost","[POD THRUSTERS SURGING]"),podPass:()=>cue("podPass","[WRECKAGE RUSHES PAST]"),
+  cradleCapture:()=>cue("door","[CLAMPS CATCH / POD SETTLES INTO THE CRADLE]"),
+  liftLoad:()=>cue("hullGroan","[WINCH CABLE TAKES THE POD'S WEIGHT]"),
   flashlight:()=>cue("flashlight"),holdStart:()=>cue("holdStart"),holdCancel:()=>cue("holdCancel"),done:()=>cue("done"),
   repairComplete(kind) {
     play('holdStart', null, .42, kind === 'patched' ? .8 : 1.15);

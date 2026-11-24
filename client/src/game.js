@@ -12,7 +12,7 @@ import { createInput } from "./input.js";
 import { createHud } from "./hud.js";
 import { createChatView, bindChatInput } from "./chat.js";
 import { options, QUALITY, onOptionsChange, showOptions } from "./options.js";
-import { unlockAudio, setThreatAudio, setCaptionSink, setAudioListener, setAudioEnvironment, setCreatureContact, updateMovementAudio, createPodSound, sfx } from "./audio.js";
+import { unlockAudio, setThreatAudio, setCaptionSink, setAudioListener, setAudioEnvironment, setCreatureContact, updateMovementAudio, updateCrewSteps, createPodSound, sfx } from "./audio.js";
 import { FINALE_POINTS, CAPSULE_STEPS } from "../../shared/tactical.js";
 import { createPodView } from "./pod-view.js";
 import { createPrologue } from "./prologue.js";
@@ -31,7 +31,7 @@ import {PRACTICE_STEPS,practiceTargetAllowed} from '../../shared/practice.js';
 import {saveEvidence} from './case-file.js';
 import {EXTERIOR_ZONES,exteriorZone} from '../../shared/exterior.js';
 import {createWorkHands,workPose,workAim} from './work-hands.js';
-import {cameraContact} from './hand-rig.js';
+import {cameraContact,frameRepair} from './hand-rig.js';
 
 const SEND_INTERVAL_MS = 70;
 const HOLD_RETRY_MS = 600;
@@ -79,12 +79,12 @@ export function startGame({ playerId, code, match, chat }) {
   const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 140);
   camera.rotation.order = "YXZ";
   scene.add(camera);
-  scene.add(new THREE.HemisphereLight(0x7aa8bc, 0x0a1218, 1.1));
+  scene.add(new THREE.HemisphereLight(0x7aa8bc, 0x0a1218, .72));
   const fill = new THREE.DirectionalLight(0x7ba5b5, 0.45);
   fill.position.set(4, 8, 3);
   scene.add(fill);
-  const FLASH_ON = 30;
-  const flashlight = new THREE.SpotLight(0xc9f4ff, FLASH_ON, 17, Math.PI / 7, 0.4, 1.3);
+  const FLASH_ON = 35;
+  const flashlight = new THREE.SpotLight(0xc9f4ff, FLASH_ON, 17, Math.PI / 5.8, .68, 1.3);
   flashlight.target.position.set(0, 0, -1);
   camera.add(flashlight);
   camera.add(flashlight.target);
@@ -390,6 +390,7 @@ function myHold() {
 }
 
 function requestHold(target) {
+  G.requestedTarget = target;
   net.interact(target.id);
   G.lastReq = performance.now();
 }
@@ -536,13 +537,22 @@ function movePlayer(dt, me) {
   }
   let speed = me.ext ? SWIM_SPEED : running ? RUN_SPEED : WALK_SPEED;
   if (!me.ext && depthAt(G.state, G.player.x, G.player.z) > FLOODED_SLOW_LEVEL) speed *= FLOODED_SPEED_FACTOR;
-  const yaw = G.input.yaw, d = speed * dt;
-  const dx = (-Math.sin(yaw) * f + Math.cos(yaw) * s) * d;
-  const dz = (-Math.cos(yaw) * f - Math.sin(yaw) * s) * d;
+  const yaw = G.input.yaw;
+  let vx = (-Math.sin(yaw) * f + Math.cos(yaw) * s) * speed;
+  let vz = (-Math.cos(yaw) * f - Math.sin(yaw) * s) * speed;
+  if (me.ext) {
+    const swim = G.swimVelocity ??= new THREE.Vector2();
+    const blend = 1-Math.exp(-(moving ? 8 : 5)*dt);
+    vx = swim.x += (vx-swim.x)*blend;
+    vz = swim.y += (vz-swim.y)*blend;
+  } else G.swimVelocity?.set(0,0);
+  const dx = vx*dt, dz = vz*dt;
   const p = G.player, closed = closedRooms(G.state);
   const blocked = (x, z) => collides(x, z, PLAYER_RADIUS, closed, me.ext) || (me.ext ? Math.abs(x) > EXT_LIMIT || Math.abs(z) > EXT_LIMIT : !insideStation(x, z));
   if (!blocked(p.x + dx, p.z)) p.x += dx; // one axis at a time lets you slide along walls
+  else if(me.ext) G.swimVelocity.x=0;
   if (!blocked(p.x, p.z + dz)) p.z += dz;
+  else if(me.ext) G.swimVelocity.y=0;
   return running;
 }
 
@@ -592,6 +602,7 @@ function step() {
   if (G.phase === "briefing" && G.prologue.update((G.briefingEndsAt - now) / 1000, camera, reduced)) {
     setAudioEnvironment({active:!G.connectionLost,outside:true,underwater:false,pod:false,surface:false});
     hud.hideBriefing(); setFog("outside"); G.fill.intensity = 1.2;
+    G.world.updateSub(state.sub,dt);
     G.world.update(state, { dt, time, now, reducedEffects: reduced, holdIds: new Set(), alert: 0, viewer: camera.position });
     return;
   }
@@ -609,7 +620,7 @@ function step() {
     // Preserve walking speed at lower frame rates without stepping through walls.
     const travelTime = Math.min(frameTime, 0.2), steps = Math.max(1, Math.ceil(travelTime / 0.04));
     for (let i = 0; i < steps; i++) running = movePlayer(travelTime / steps, me);
-  }
+  } else G.swimVelocity?.set(0,0);
   if (G.phase === "playing" && !G.connectionLost && !G.over && me && !me.lost && !me.down && !me.escaped && now - G.lastSent >= SEND_INTERVAL_MS) {
     G.lastSent = now;
     if(me.subSeat==='driver'&&canAct()){const axes=G.input.axes();net.subControl(Math.sign(axes.s),Math.sign(axes.f));}
@@ -622,16 +633,25 @@ function step() {
   G.lastSubSeat=me?.subSeat||null;
 
   // ---- camera
+  const subBody=G.world.updateSub(state.sub,dt,G.spectateId ?? G.playerId);
   let eye = EYE_HEIGHT, cx = G.player.x, cz = G.player.z, yaw = G.input.yaw, pitch = G.input.pitch, roll = 0;
   G.displayDepth=(G.displayDepth||0)+((me?.ext&&!me.subSeat?me.depth||0:0)-(G.displayDepth||0))*(1-Math.exp(-12*dt));eye-=G.displayDepth;
-  if(me?.subSeat){yaw=state.sub.yaw+G.input.yaw-G.subLookBase;G.subLastYaw=yaw;eye=SUB_TUNING.eye;const side=me.subSeat==='driver'?-.32:.32;cx+=Math.cos(state.sub.yaw)*side-Math.sin(state.sub.yaw)*.25;cz-=Math.sin(state.sub.yaw)*side+Math.cos(state.sub.yaw)*.25;}
+  if(me?.subSeat){
+    const heading=subBody.rotation.y;
+    yaw=heading+G.input.yaw-G.subLookBase;
+    G.subLastYaw=yaw;
+    eye=SUB_TUNING.eye;
+    const side=me.subSeat==='driver'?-.32:.32;
+    cx=subBody.position.x+Math.cos(heading)*side-Math.sin(heading)*.25;
+    cz=subBody.position.z-Math.sin(heading)*side-Math.cos(heading)*.25;
+  }
   if (me?.lost || me?.escaped) { // each outcome settles independently
     const list = spectateTargets();
     if (!list.some((p) => p.id === G.spectateId)) G.spectateId = list[0]?.id ?? null;
     const r = G.spectateId ? G.remotes.get(G.spectateId) : null;
     const target = state.players.find(p => p.id === G.spectateId);
     hud.setSpectate({target: list.find(p => p.id === target?.id), count: list.length, index: list.indexOf(target) + 1, stage: state.stage});
-    if(target?.subSeat){cx=state.sub.x;cz=state.sub.z;eye=SUB_TUNING.eye;yaw=state.sub.yaw;pitch=0;}
+    if(target?.subSeat){cx=subBody.position.x;cz=subBody.position.z;eye=SUB_TUNING.eye;yaw=subBody.rotation.y;pitch=0;}
     else if (r) { cx = r.group.position.x; cz = r.group.position.z; yaw = r.group.rotation.y; pitch = 0; eye = (r.down ? DOWNED_EYE_HEIGHT : EYE_HEIGHT)-(target?.depth||0); }
     else { cx = 0; cz = 0; eye = 6; pitch = -0.6; }
   } else {
@@ -640,6 +660,12 @@ function step() {
   }
   camera.position.set(cx, eye, cz);
   camera.rotation.set(pitch, yaw, roll);
+  const mine=myHold();
+  const workTarget=mine && G.holdWanted && canAct() && G.requestedTarget?.id===mine.id ? G.requestedTarget : null;
+  const surface=G.world.workSurface(workTarget,camera.position);
+  const repairing=workTarget && (workTarget.kind==='breach'||workTarget.kind==='station'||mine.id==='service:pump'||mine.id===SALVAGE.install);
+  const stance=G.repairStance??={offset:new THREE.Vector3(),yaw:0,pitch:0};
+  if(repairing||stance.offset.lengthSq()>1e-10)frameRepair(camera,repairing?surface:null,stance,dt,reduced);
   const motion = G.locomotion.update(frameTime, Math.hypot(G.player.x - beforeX, G.player.z - beforeZ), {
     running, swimming: !!me?.ext, strafe: G.input.axes().s, reduced,
     active: canAct() && !me?.aboard&&!me?.subSeat && !G.holdWanted
@@ -671,13 +697,16 @@ function step() {
   const outside = watched?.ext ?? (roomAt(viewer.x, viewer.z) === "exterior");
   const depthShade=1/(1+(watched?.depth||0)*.12);
   const flashlightOn = me?.lost || me?.escaped ? !!watched?.flashlight : G.flashOn;
-  G.fill.intensity=outside ? .85*depthShade : .45;
+  G.fill.intensity=outside ? .62*depthShade : state.power ? .35 : .22;
   const region=exteriorZone(viewer.x,viewer.z);
   G.flashlight.distance = outside ? region.lamp*depthShade : 17;
-  G.flashlight.intensity = flashlightOn ? G.FLASH_ON * (outside ? 1.4 : 1) : 0;
+  // At arm's length the lamp is close enough to wash out a gauge or weld.
+  const workLight=repairing && surface ? THREE.MathUtils.smoothstep(camera.position.distanceTo(surface.point),.6,1.8) : 1;
+  G.flashlight.intensity = flashlightOn ? G.FLASH_ON * (.16+.84*workLight) * (outside ? 1.4 : 1) : 0;
   const depth = depthAt(state, viewer.x, viewer.z);
   const under = !G.viewPod && !outside && depth > eye - 0.1;
-  setAudioEnvironment({active:!G.connectionLost && !G.over,outside:outside && !G.viewPod,underwater:under,pod:G.viewPod,surface:false});
+  setAudioEnvironment({active:!G.connectionLost && !G.over,outside:outside && !G.viewPod,underwater:under,pod:G.viewPod,surface:false,rooms:state.rooms});
+  updateCrewSteps(state.players, watched?.id ?? G.playerId, state.rooms);
   setCreatureContact(!state.finale && !G.over ? state.lev : null);
   updateMovementAudio(Math.hypot(G.player.x-beforeX,G.player.z-beforeZ),{
     active:canAct() && !me?.aboard&&!me?.subSeat, running, swimming:!!me?.ext, wet:depth>.12
@@ -686,7 +715,7 @@ function step() {
   hud.setUnderwater(under && !reduced);
   const holdIds = new Set(Object.values(state.holds).map((h) => h.id));
   const alert = state.lockdown.active || state.stage === "boarding" ? 1 : state.oxygen < 15 ? 0.6 : 0;
-  if (!G.viewPod) G.world.update(state, { dt, time, now, reducedEffects: reduced, holdIds, alert, viewer: camera.position, camera, outside, underwater:under, flashlightOn,selfId:watched?.id ?? G.playerId });
+  if (!G.viewPod) G.world.update(state, { dt, time, now, reducedEffects: reduced, holdIds, alert, viewer: camera.position, camera, outside, underwater:under, flashlightOn });
   if (G.repairId && Math.hypot(G.player.x - STATIONS[G.repairId].x, G.player.z - STATIONS[G.repairId].z) > REPAIR_RANGE + 0.3) closeRepair();
 
   // ---- warnings
@@ -701,9 +730,8 @@ function step() {
   // ---- prompts
   if(me?.submerged&&me.breath<=6&&now-(G.lastBreathWarn??-Infinity)>6000){G.lastBreathWarn=now;sfx.drowning();}
   if(me?.contactWarning&&now-(G.lastContactWarn??-Infinity)>4000){G.lastContactWarn=now;sfx.closeContact();}
-  const mine = myHold();
-  const workTarget=mine?nearestTarget():null,workPoint=workTarget?.st||workTarget?.b||workTarget?.o||workTarget?.point;
-  G.workHands.update(workPose({hold:mine,working:G.holdWanted&&workTarget?.id===mine?.id,blocked:!canAct()||G.phase!=='playing'||!!G.epilogue||G.viewPod||!!G.lockerId||G.consoleOpen||G.votingShown||document.body.classList.contains('wrist-open'),player:me,stage:state.stage,aim:workAim(workPoint,camera.position,G.input.yaw,G.input.pitch),contact:cameraContact(G.world.workSurface(workTarget,camera.position),camera)}),dt,reduced);
+  const workPoint=workTarget?.st||workTarget?.b||workTarget?.o||workTarget?.point;
+  G.workHands.update(workPose({hold:mine,working:!!workTarget,blocked:!canAct()||G.phase!=='playing'||!!G.epilogue||G.viewPod||!!G.lockerId||G.consoleOpen||G.votingShown||document.body.classList.contains('wrist-open'),player:me,stage:state.stage,aim:workAim(workPoint,camera.position,G.input.yaw,G.input.pitch),contact:cameraContact(surface,camera)}),dt,reduced);
   if (mine) {
     if (!G.wasHolding) sfx.holdStart();
     G.wasHolding = true;
@@ -902,6 +930,7 @@ export function handleOver(outcome) {
 export function handleCorrect({ x, z, teleport, rotation }) {
   if (!G || !Number.isFinite(x) || !Number.isFinite(z)) return;
   G.player.x = x; G.player.z = z;
+  G.swimVelocity?.set(0,0);
   if (Number.isFinite(rotation)) G.input.yaw = rotation;
   if (teleport) { sfx.holdStart(); G.flash = 0.25; }
 }
@@ -924,6 +953,7 @@ export function setConnectionLost(lost) {
 export function replaceMatch(match) { // after a reconnect: resync with the server
   if (!G) return;
   G.player.x = match.self.x; G.player.z = match.self.z;
+  G.swimVelocity?.set(0,0);
   G.phase = match.phase;
   G.flashOn=match.state.players.find(p=>p.id===G.playerId)?.flashlight??true;
   G.briefingEndsAt = performance.now() + (match.briefingEndsIn ?? 0);

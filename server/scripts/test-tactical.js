@@ -33,6 +33,22 @@ function finale(n = 4) {
 }
 
 {
+  const m=finale(1), pod=m.game.finale.pod, pilot=m.players[0];
+  pod.creatureDistance=12;
+  pod.speed=2.8;
+  for(let i=0;i<25;i++){podControl(m.game,m.players,pilot,{steer:0,throttle:1,boost:true});advance(m,.1);}
+  const opened=pod.creatureDistance;
+  check('sustained boost opens a real gap while pursued',opened>15 && pod.hull===100);
+  podControl(m.game,m.players,pilot,{steer:0,throttle:1,boost:false});advance(m,.1);
+  check('boost release carries momentum instead of snapping to cruise',pod.speed>4 && pod.speed<4.4);
+  for(let i=0;i<25;i++){podControl(m.game,m.players,pilot,{steer:0,throttle:1,boost:false});advance(m,.1);}
+  check('the Leviathan closes again as the pod loses thrust',pod.creatureDistance<opened-3 && pod.hull===100);
+  const beforeBrake=pod.progress;
+  podControl(m.game,m.players,pilot,{steer:0,throttle:.15,boost:false});advance(m,.1);
+  check('braking slows the pod over distance instead of stopping it immediately',pod.speed>2 && pod.speed<2.8 && pod.progress>beforeBrake);
+}
+
+{
   const m = finale(), pod = m.game.finale.pod, pilot = m.players[0];
   pod.progress = POD_ROUTE_LENGTH; pod.route.forEach(g => g.passed = true);
   podControl(m.game, m.players, pilot, { steer: 0, throttle: 1, boost: false }); advance(m, 0.1);
@@ -135,7 +151,7 @@ for (const n of [1, 2, 3]) {
   check("non-pilot pod crew cannot steer", podControl(m.game, m.players, supporter, { steer: 0, throttle: 1, boost: true }) !== null);
   check("NaN steering is refused", podControl(m.game, m.players, pilot, { steer: NaN, throttle: 1, boost: true }) !== null);
   check("extreme finite input is bounded", podControl(m.game, m.players, pilot, { steer: 999, throttle: 999, boost: true }) === null && pod.input.steer === 1 && pod.input.throttle === 1);
-  advance(m, 0.2); check("boost consumes a finite propulsion reserve", pod.battery < 100 && pod.speed > 2.8);
+  advance(m, 0.2); check("boost consumes a finite propulsion reserve and ramps up from rest", pod.battery < 100 && pod.speed > 0 && pod.speed < 2.8);
   pilot.connected = false; advance(m, 0.1); check("disconnection automatically reassigns the pilot", pod.pilot === supporter.id);
   check("malformed pod actions are refused", podAction(m.game, m.players, supporter, "__proto__", []) !== null);
 }

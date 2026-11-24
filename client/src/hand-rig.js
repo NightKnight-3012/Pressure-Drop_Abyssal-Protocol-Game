@@ -1,6 +1,34 @@
 import * as THREE from 'three';
 
 const Y=new THREE.Vector3(0,1,0);
+// Only the first-person viewpoint leans in. Movement and interaction range
+// continue to use the player's actual feet and the acknowledged server hold.
+export function frameRepair(camera,surface,stance,dt,reduced){
+  const offset=new THREE.Vector3();
+  let yawOffset=0,pitchOffset=0;
+  if(surface){
+    const towardEye=camera.position.clone().sub(surface.point);
+    towardEye.y=0;
+    if(towardEye.lengthSq()<.0001)towardEye.set(Math.sin(camera.rotation.y),0,Math.cos(camera.rotation.y));
+    towardEye.normalize();
+    const floor=surface.normal.y>.75;
+    const side=floor?towardEye:surface.normal.clone().setY(0).normalize();
+    const eye=surface.point.clone().addScaledVector(side,floor?.36:.54);
+    eye.y+=floor?.62:.22;
+    offset.copy(eye).sub(camera.position);
+    const direction=surface.point.clone().sub(eye);
+    const turn=Math.atan2(-direction.x,-direction.z)-camera.rotation.y;
+    yawOffset=Math.atan2(Math.sin(turn),Math.cos(turn));
+    pitchOffset=Math.atan2(direction.y,Math.hypot(direction.x,direction.z))-camera.rotation.x;
+  }
+  const blend=reduced?1:1-Math.exp(-14*dt);
+  stance.offset.lerp(offset,blend);
+  stance.yaw+=(yawOffset-stance.yaw)*blend;
+  stance.pitch+=(pitchOffset-stance.pitch)*blend;
+  camera.position.add(stance.offset);
+  camera.rotation.y+=stance.yaw;
+  camera.rotation.x+=stance.pitch;
+}
 // Fixed-length two-bone IK. A pole chooses the elbow bend without changing the wrist target.
 export function solveArm(shoulder,target,pole,upper=.46,lower=.46){
   const axis=target.clone().sub(shoulder),distance=axis.length();

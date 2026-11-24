@@ -11,7 +11,7 @@ export function boardSub(game,p){
   else if(dist(p,s)>T.boardRange||Math.abs(s.speed)>.6||p.depth>1.25)return 'Surface to the survey level and approach the stationary sub hatch.';
   const seat=!s.driver?'driver':!s.passenger?'passenger':null;if(!seat)return 'Both survey-sub seats are occupied.';
   s[seat]=p.id;p.subSeat=seat;p.exterior=true;p.depth=0;p.vertical=0;p.x=s.x;p.z=s.z;p.running=false;
-  if(seat==='driver'){s.steer=s.throttle=s.inputUntil=0;}
+  if(seat==='driver'){s.steer=s.throttle=s.inputUntil=s.turnSpeed=0;}
   (game.pendingEvents??=[]).push({type:'subBoarded',by:p.id,seat},{type:'teleport',id:p.id});return null;
 }
 export function controlSub(game,p,data){
@@ -21,7 +21,7 @@ export function controlSub(game,p,data){
 }
 export function canDockSub(game,p){const s=game.sub;return game.status==='playing'&&['main','vote','boarding'].includes(game.stage)&&active(p)&&p.subSeat==='driver'&&s.driver===p.id&&s.hull>0&&game.tasks.power.done&&dist(s,SUB_DOCK)<=T.dockRange&&Math.abs(s.speed)<.6;}
 export function dockSub(game,players,events){
-  const s=game.sub;s.x=SUB_DOCK.x;s.z=SUB_DOCK.z;s.speed=s.throttle=s.steer=0;s.docked=true;
+  const s=game.sub;s.x=SUB_DOCK.x;s.z=SUB_DOCK.z;s.speed=s.throttle=s.steer=s.turnSpeed=0;s.docked=true;
   for(const seat of ['driver','passenger']){const p=players.find(p=>p.id===s[seat]);if(p){p.subSeat=null;p.exterior=false;p.depth=0;p.x=AIRLOCK_ARRIVE_INT.x;p.z=AIRLOCK_ARRIVE_INT.z;events.push({type:'teleport',id:p.id});}s[seat]=null;}
   events.push({type:'subDocked'});
 }
@@ -39,7 +39,7 @@ export function subAction(game,players,p,action){
   if(action==='pilot'){
     const driver=players.find(q=>q.id===s.driver);if(p.subSeat==='driver')return 'You already have the controls.';
     if(driver&&active(driver))return 'The current pilot still has the controls.';
-    s.passenger=driver?.id??null;if(driver)driver.subSeat='passenger';s.driver=p.id;p.subSeat='driver';s.throttle=s.steer=0;s.inputUntil=0;
+    s.passenger=driver?.id??null;if(driver)driver.subSeat='passenger';s.driver=p.id;p.subSeat='driver';s.throttle=s.steer=s.turnSpeed=0;s.inputUntil=0;
     (game.pendingEvents??=[]).push({type:'subPilot',by:p.id});return null;
   }
   if(!['main','vote','boarding'].includes(game.stage)||s.hull<=0)return 'Survey-sub equipment is unavailable.';
@@ -62,8 +62,13 @@ export function tickSub(game,players,dt){
   const occupants=players.filter(p=>p.subSeat&&s[p.subSeat]===p.id),driver=players.find(p=>p.id===s.driver);
   const controlling=driver&&active(driver)&&game.time<s.inputUntil&&s.hull>0&&['main','vote','boarding'].includes(game.stage);
   const throttle=controlling?s.throttle:0,steer=controlling?s.steer:0;
-  s.yaw=Math.atan2(Math.sin(s.yaw-steer*T.turn*dt),Math.cos(s.yaw-steer*T.turn*dt));
-  s.speed+=(throttle*(throttle<0?T.reverse:T.speed)-s.speed)*Math.min(1,dt*3);
+  s.turnSpeed ??= 0;
+  s.turnSpeed += (-steer*T.turn-s.turnSpeed) * (1-Math.exp(-5*dt));
+  if(!controlling) s.turnSpeed=0;
+  const yaw=s.yaw+s.turnSpeed*dt;
+  s.yaw=Math.atan2(Math.sin(yaw),Math.cos(yaw));
+  const drag=controlling && throttle ? 2.5 : 3.6;
+  s.speed+=(throttle*(throttle<0?T.reverse:T.speed)-s.speed)*(1-Math.exp(-drag*dt));
   const x=s.x-Math.sin(s.yaw)*s.speed*dt,z=s.z-Math.cos(s.yaw)*s.speed*dt;
   if(Math.abs(x)>EXT_LIMIT-T.radius||Math.abs(z)>EXT_LIMIT-T.radius||pathBlocked(s.x,s.z,x,z,T.radius,[],true)){
     if(Math.abs(s.speed)>1&&game.time>=s.bumpAt){s.hull=Math.max(0,s.hull-Math.min(8,Math.abs(s.speed)*1.2));s.bumpAt=game.time+1.2;events.push({type:'subBump',x:s.x,z:s.z});}s.speed=0;

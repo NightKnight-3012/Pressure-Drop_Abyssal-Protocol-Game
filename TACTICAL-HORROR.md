@@ -12,7 +12,7 @@ The existing local models work without another download. For a production build,
 
 ## First act: restore the station
 
-The host chooses Blackout, Pressure or Silence. Pressure increases flooding; Silence starts with less oxygen and a more sensitive hunter. The briefing lasts ten seconds.
+The host chooses Blackout, Pressure, Silence or Deep overhaul. In Deep overhaul, the compressor, scrubbers and isolation manifold have six-second base holds. The final pressure test takes eight seconds before crew modifiers. Pressure increases flooding; Silence starts with less oxygen and a more sensitive hunter. The briefing lasts ten seconds.
 
 The suit display prioritizes health, oxygen and your own noise. **Tab** opens the wrist computer for systems, crew, stamina and room flooding. Command retains detailed sonar information. Spatial groans, impacts and warning captions provide clues without exposing an exact global monster threat meter.
 
@@ -70,3 +70,7 @@ The scenes use animated cameras, locally authored geometry, the existing creatur
 ## Verification
 
 `npm.cmd test` checks rules, tactical outcomes and multiplayer validation. `npm.cmd run test:client` exercises the client against a real server with simulated rendering. `npm.cmd run test:models` validates model integration. After a build, `npm.cmd run test:browser` runs actual Chrome/WebGL checks and saves screenshots under `test/artifacts` (Chrome required; `BROWSER_BIN` may override its location). `npm.cmd run balance -- 0 12` simulates twelve seeds across every crew size. Scripted crews are useful regression checks; human playtesting is still needed to tune difficulty.
+
+During an active pursuit, the pod takes time to accelerate. At full boost the gap opens by 1.8 metres per second, and you carry some speed after releasing the boost. Brake early near wreckage and use the stern monitor to see when the Leviathan starts gaining again.
+
+Divers glide briefly after releasing movement or depth controls. The survey sub takes longer to reach full speed and continues turning briefly as you release the stick. Inside the station, water jets from active leaks and spills through open bulkheads from higher water to lower water. Closing the door cuts that flow and muffles nearby crew footsteps. Watch the docking cradle settle under the pod before the winch takes its weight.

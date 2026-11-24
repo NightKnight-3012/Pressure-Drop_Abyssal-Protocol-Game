@@ -36,6 +36,19 @@ export function createRouteScenery() {
     place(new THREE.BoxGeometry(18,.7,2),at,0,6.1,1,[0,0,.04]);
     place(new THREE.BoxGeometry(4,.08,.1),at,0,5.6,4);
   }
+  // Paired inward chevrons bracket the entrance to the recovery shaft.
+  // They sit on both shoulders, outside the steering lanes, in existing batches.
+  for (const at of [189, 195, 201]) {
+    for (const side of [-1, 1]) {
+      const x = side * 7.6;
+      place(new THREE.BoxGeometry(.55, 4.6, .65), at, x, .4);
+      for (const slope of [-1, 1]) {
+        place(new THREE.BoxGeometry(.92, .115, .09), at, x, 1.25+slope*.26, 3,
+          [0, 0, side*slope*.58]);
+      }
+      place(new THREE.BoxGeometry(.2, .9, .12), at, x, -.25, 4);
+    }
+  }
   // Paired guide dashes follow the actual bends; they mark corridor edges,
   // not a safe lane through the server's randomly selected obstacles.
   for(let at=6;at<198;at+=2.5){

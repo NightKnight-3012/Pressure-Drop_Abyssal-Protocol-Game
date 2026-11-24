@@ -12,12 +12,21 @@ export function createPodMonitor(scene) {
   const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.MeshBasicMaterial({ map: target.texture, toneMapped: false, depthTest: false, depthWrite: false })); screen.add(quad);
   const viewport = new THREE.Vector4(), scissor = new THREE.Vector4();
   let shown = false, due = false, rect = null, width = 0, height = 0, lastCapture = -1;
+  let rangeAt = 0, previousRange = null, trend = 'CONTACT';
   return {
     update(pod, pursuing, lane, rear, time, hit) {
       const visible = pod.status === "running" && !["sealing", "ascent"].includes(pod.phase) && !rear;
       if (shown !== visible) { frame.classList.toggle("hidden", !visible); shown = visible; rect = null; }
       frame.classList.toggle("danger", pursuing && pod.creatureDistance < 12);
-      const text = pursuing ? `STERN / ${Math.round(pod.creatureDistance)}m / ${pod.creatureDistance < 9 ? "ATTACK" : "CONTACT"}` : "STERN / STATION CONTACT";
+      if (!pursuing) { previousRange = null; trend = 'CONTACT'; }
+      else if (previousRange === null || time - rangeAt >= .65) {
+        const change = previousRange === null ? 0 : pod.creatureDistance - previousRange;
+        trend = change > .35 ? 'OPENING' : change < -.35 ? 'CLOSING' : 'CONTACT';
+        previousRange = pod.creatureDistance;
+        rangeAt = time;
+      }
+      const status = pod.creatureDistance < 9 && trend !== 'OPENING' ? 'ATTACK' : trend;
+      const text = pursuing ? `STERN / ${Math.round(pod.creatureDistance)}m / ${status}` : "STERN / STATION CONTACT";
       if (label.textContent !== text) label.textContent = text;
       camera.position.set(lane * 4, 2.1, 8); camera.lookAt(lane * 4, 2.4, 60);
       const fov = pursuing && pod.creatureDistance < 12 ? 42 : 58;

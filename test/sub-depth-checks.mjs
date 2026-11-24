@@ -13,6 +13,14 @@ for(let n=1;n<=8;n++)check(`${n} crew keep all baseline jobs and have exactly tw
 check('boarding validates power, range, active state, air and motion',()=>{for(const flag of ['power','far','lost','downed','air','hull','moving']){const s=setup();Object.assign(s.p,{x:SUB_BOARD.x,z:SUB_BOARD.z+1});if(flag==='power')s.game.tasks.power.done=false;if(flag==='far')s.p.x=0;if(flag==='lost'||flag==='downed')s.p[flag]=true;if(flag==='air')s.game.sub.air=0;if(flag==='hull')s.game.sub.hull=0;if(flag==='moving'){s.p.exterior=true;s.p.x=s.game.sub.x;s.p.z=s.game.sub.z;s.game.sub.speed=2;}assert(startHold(s.game,s.players,s.p,'sub:board'),flag);assert.equal(s.game.sub.driver,null);}});
 check('only the pilot can send finite bounded control inputs',()=>{const s=setup();board(s);board(s,s.players[1]);for(const data of [{steer:NaN,throttle:1},{steer:0,throttle:2},{steer:'0',throttle:1}])assert(subControl(s.game,s.p,data));assert(subControl(s.game,s.players[1],{steer:0,throttle:1}));assert.equal(subControl(s.game,s.p,{steer:0,throttle:1}),null);});
 check('vehicle movement is server-integrated and stale/disconnected inputs stop thrust',()=>{const s=setup();board(s);const start=s.game.sub.z;for(let i=0;i<4;i++){subControl(s.game,s.p,{steer:0,throttle:1});tick(s,.25);}assert(s.game.sub.z<start-2);assert.equal(s.p.z,s.game.sub.z);tick(s,2);const stopped=s.game.sub.z;tick(s,1);assert(Math.abs(s.game.sub.z-stopped)<.05);s.p.connected=false;assert(subControl(s.game,s.p,{steer:0,throttle:1}));});
+check('the survey sub builds and sheds angular velocity while the pilot steers',()=>{
+  const s=setup();board(s);
+  subControl(s.game,s.p,{steer:1,throttle:0});tick(s,.25);
+  const turn=s.game.sub.turnSpeed, yaw=s.game.sub.yaw;
+  assert(turn<0 && turn>-SUB_TUNING.turn);
+  subControl(s.game,s.p,{steer:0,throttle:0});tick(s,.25);
+  assert(s.game.sub.yaw<yaw && Math.abs(s.game.sub.turnSpeed)<Math.abs(turn));
+});
 check('collision blocks hull penetration and causes bounded hull damage',()=>{const s=setup();board(s);Object.assign(s.game.sub,{x:-14,z:5.5,yaw:-Math.PI/2});for(let i=0;i<20;i++){subControl(s.game,s.p,{steer:0,throttle:1});tick(s,.25);}assert(!collides(s.game.sub.x,s.game.sub.z,SUB_TUNING.radius,[],true));assert(s.game.sub.hull<100&&s.game.sub.hull>0);});
 check('vehicle air belongs to the vessel and empty air damages its occupants',()=>{const s=setup();board(s);board(s,s.players[1]);Object.assign(s.game.sub,{x:-22,z:5.5,docked:false,air:100});s.p.suit=37;tick(s,1);assert.equal(s.p.suit,37);assert.equal(s.game.sub.air,99);s.game.sub.air=0;tick(s,1);assert(s.p.hp<100&&s.players[1].hp<100);});
 check('a real Leviathan strike damages the sub hull once rather than twice for two seats',()=>{const s=setup();board(s);board(s,s.players[1]);const angle=Math.atan2(s.game.sub.z,s.game.sub.x);Object.assign(s.game.lev,{state:'attack',dist:10.8,angle,target:angle,threat:100});tick(s,.25);assert.equal(s.game.sub.hull,60);assert.equal(s.p.hp,100);assert.equal(s.players[1].hp,100);});
@@ -24,6 +32,15 @@ check('hull repairs consume one real material and never restore a destroyed vehi
 check('hull loss safely ejects both crew within visible survey bounds',()=>{const s=setup();board(s);board(s,s.players[1]);Object.assign(s.game.sub,{x:57.8,z:0,hull:0});const events=tick(s,.25);assert(events.some(e=>e.type==='subDestroyed'));for(const p of s.players){assert.equal(p.subSeat,null);assert(p.exterior);assert(Math.abs(p.x)<EXT_LIMIT&&Math.abs(p.z)<EXT_LIMIT);assert(!collides(p.x,p.z,.4,[],true));}});
 check('snapshots copy vessel state and a fresh match resets every seat, charge and hull',()=>{const s=setup();board(s);const snap=snapshotGame(s.game,s.players);snap.sub.hull=0;assert.equal(s.game.sub.hull,100);const fresh=createGame({players:s.players,seed:4});assert.equal(fresh.sub.driver,null);assert.equal(fresh.sub.flareCharges,3);assert(s.players.every(p=>p.subSeat===null));});
 check('depth integrates validated intents and cannot pass through the shared seabed',()=>{const s=setup();Object.assign(s.p,{x:0,z:-43,exterior:true});for(let i=0;i<30;i++){assert.equal(diverControl(s.game,s.p,1),null);tick(s,.25);}assert(s.p.depth>1);assert(s.p.depth<=maximumDive(s.p.x,s.p.z));assert(1.65-s.p.depth>oceanHeight(s.p.x,s.p.z));const before=s.p.depth;assert(diverControl(s.game,s.p,Infinity));assert(diverControl(s.game,s.p,2));assert.equal(s.p.depth,before);for(let i=0;i<30;i++){diverControl(s.game,s.p,-1);tick(s,.25);}assert.equal(s.p.depth,0);});
+check('releasing dive input leaves a short glide before drag stops the diver',()=>{
+  const s=setup();Object.assign(s.p,{x:0,z:-43,exterior:true});
+  diverControl(s.game,s.p,1);tick(s,.25);
+  const before=s.p.depth, velocity=s.p.diveVelocity;
+  diverControl(s.game,s.p,0);tick(s,.25);
+  assert(s.p.depth>before && s.p.diveVelocity<velocity);
+  tick(s,1);
+  assert(s.p.diveVelocity<.001);
+});
 check('deep/far pressure consumes more air and rejects work below the survey level',()=>{assert(suitDrain(0,-43,4)>suitDrain(-14,5,0));const a=setup(),b=setup();Object.assign(a.p,{x:-14,z:5,exterior:true});Object.assign(b.p,{x:0,z:-43,exterior:true,depth:3});tick(a,1);tick(b,1);assert(b.p.suit<a.p.suit);const resource=b.game.resources[0];Object.assign(b.p,{x:resource.x,z:resource.z,depth:3});b.p.inventory[0]=null;assert(startHold(b.game,b.players,b.p,resource.id));});
 check('sub geometry uses at most eight draws, no lights/shadows, and disposes cleanly',()=>{const scene=new THREE.Scene(),view=createSubView(scene);view.update(setup().game.sub,.1);assert(view.root.children.length+2<=8);view.root.traverse(m=>{assert(!m.isLight&&!m.castShadow);if(m.geometry)assert([...m.geometry.attributes.position.array].every(Number.isFinite));});view.dispose();assert.equal(scene.children.length,0);});
 console.log(`${count} submersible and diving checks passed`);

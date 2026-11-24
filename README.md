@@ -28,6 +28,8 @@ For a longer run, select **Deep overhaul** in the lobby. The east service corrid
 | **Enter** | Open crew chat. |
 
 During the pod escape, use **A/D** to steer, **S** to brake for docking and **Shift** to boost.
+Watch the stern monitor to see whether the Leviathan is gaining, and look for paired chevrons as you approach the recovery shaft.
+The lift lights up toward the cradle and opens its doors as you approach.
 
 ## Run locally
 

@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 import { createStaticHandler } from "../server/http.js";
 import { pathBlocked, collides, PLAYER_RADIUS } from "../shared/layout.js";
 import { normalizeOptions } from "../client/src/options.js";
-import { podMotionTarget, POD_VISUAL_SCALE } from "../client/src/pod-motion.js";
+import { podMotionTarget, POD_VISUAL_SCALE, updatePodTravel } from "../client/src/pod-motion.js";
 
 let checks = 0;
 function check(name, value) { assert.ok(value, name); checks++; console.log(`PASS ${name}`); }
@@ -30,6 +30,13 @@ check("visual route scaling preserves server progression", podMotionTarget(cruis
 check("a settled pod does not keep engine or boost effects running", podMotionTarget({ ...boost, status: "escaped" }).speed === 0 && !podMotionTarget({ ...boost, status: "escaped" }).boost);
 check("low-throttle boost still gives thrust feedback", podMotionTarget({ ...boost, speed: 3 }).boost);
 check("pursuit intensity increases as the creature closes", podMotionTarget({ ...cruise, creatureDistance: 5 }).danger > podMotionTarget(cruise).danger);
+const travel={}, first={...cruise,phase:'run',progress:20};
+const start=updatePodTravel(travel,first,1/60);
+const between=updatePodTravel(travel,first,1/60);
+const late=updatePodTravel(travel,{...first},1/60);
+check("pod travel advances smoothly between snapshots and never rewinds on a late duplicate",between>start && late>=between);
+for(let i=0;i<45;i++)updatePodTravel(travel,travel.snapshot,1/60);
+check("pod motion stops extrapolating when snapshots stall",travel.progress<=first.progress+first.speed*.1+1e-6);
 
 // The real production handler, independently of Vite or the browser harness.
 const server = http.createServer(createStaticHandler(resolve("client")));

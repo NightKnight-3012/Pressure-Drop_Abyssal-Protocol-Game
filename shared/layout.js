@@ -231,10 +231,10 @@ export const STATIONS = {
     x: -6, z: 9.55, rot: Math.PI, hold: 6, dept: "medical", requires: ["power"],
     effect: "Enables the oxygen reserve"
   },
-  compressor: { id: 'compressor', kind: 'task', label: 'Intake compressor', room: 'engineering', x: 17.7, z: -9.38, rot: 0, hold: 12, dept: 'engineering', noisy: true, overhaul: true, requires: ['pump'] },
-  scrubber: { id: 'scrubber', kind: 'task', label: 'CO₂ scrubber bank', room: 'engineering', x: 18.3, z: -6.87, rot: Math.PI, hold: 12, dept: 'medical', overhaul: true, requires: ['lifesupport'] },
-  isolation: { id: 'isolation', kind: 'task', label: 'Isolation manifold', room: 'engineering', x: 22.35, z: -6.87, rot: Math.PI, hold: 13, dept: 'command', overhaul: true, requires: ['compressor', 'scrubber', 'console'] },
-  pressure_test: { id: 'pressure_test', kind: 'task', label: 'Launch pressure test', room: 'engineering', x: 24.25, z: -9.35, rot: 0, hold: 16, dept: null, noisy: true, overhaul: true, requires: ['isolation', 'junctions'] },
+  compressor: { id: 'compressor', kind: 'task', label: 'Intake compressor', room: 'engineering', x: 17.7, z: -9.38, rot: 0, hold: 6, dept: 'engineering', noisy: true, overhaul: true, requires: ['pump'] },
+  scrubber: { id: 'scrubber', kind: 'task', label: 'CO₂ scrubber bank', room: 'engineering', x: 18.3, z: -6.87, rot: Math.PI, hold: 6, dept: 'medical', overhaul: true, requires: ['lifesupport'] },
+  isolation: { id: 'isolation', kind: 'task', label: 'Isolation manifold', room: 'engineering', x: 22.35, z: -6.87, rot: Math.PI, hold: 6, dept: 'command', overhaul: true, requires: ['compressor', 'scrubber', 'console'] },
+  pressure_test: { id: 'pressure_test', kind: 'task', label: 'Launch pressure test', room: 'engineering', x: 24.25, z: -9.35, rot: 0, hold: 8, dept: null, noisy: true, overhaul: true, requires: ['isolation', 'junctions'] },
   o2: {
     id: "o2", kind: "refill", label: "Oxygen reserve", room: "medical",
     x: -8.3, z: 9.55, rot: Math.PI, hold: 5, dept: "medical", requires: ["lifesupport"],
