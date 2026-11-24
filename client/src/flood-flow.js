@@ -96,11 +96,10 @@ export function addFloodFlow(scene) {
       const drop=Math.abs(delta);
       if(room.closed||drop<=.035)continue;
       const strength=Math.min(.85,.35+drop*.5)*THREE.MathUtils.smoothstep(drop,.035,.16);
-      for(const [index,door] of DOOR_SLABS[id].slice(0,2).entries()){
-        const x=(door.minX+door.maxX)/2,z=(door.minZ+door.maxZ)/2;
-        const dx=index===1?-ROOMS[id].sx*Math.sign(delta):0, dz=index===0?-ROOMS[id].sz*Math.sign(delta):0;
-        strip(x-dx*.21,Math.max(room.flood,state.hub)+.023,z-dz*.21,dx,dz,.87,drop,1.5,strength);
-      }
+      const [door]=DOOR_SLABS[id];
+      const x=(door.minX+door.maxX)/2,z=(door.minZ+door.maxZ)/2;
+      const dz=-ROOMS[id].sz*Math.sign(delta);
+      strip(x,Math.max(room.flood,state.hub)+.023,z-dz*.21,0,dz,.87,drop,1.5,strength);
     }
     geometry.setDrawRange(0,count);
     mesh.visible=count>0;

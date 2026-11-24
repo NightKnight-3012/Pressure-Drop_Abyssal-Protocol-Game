@@ -26,6 +26,17 @@ check('local switches work for every department; remote switches require an auth
 check('mines warn, charge only on nearby light and can be avoided quietly or disarmed by EMP',()=>{const s=setup(1,'command'),m=s.game.threats.mines[0];Object.assign(s.p,{x:m.x,z:m.z,exterior:true});const e=tickThreats(s.game,s.players,1);assert(e.events.some(e=>e.kind==='mine'));assert.equal(e.hits.length,0);s.p.flashlight=false;tickThreats(s.game,s.players,2);assert.equal(m.fuse,0);s.p.flashlight=true;assert(tickThreats(s.game,s.players,4.1).hits.length);assert(!m.active);m.active=true;m.fuse=0;s.p.inventory[0]='emp';assert.equal(useItem(s.game,s.players,s.p,0),null);assert(!m.active);});
 check('the Warden can be hidden from, diverted by a flare, or interrupted by EMP',()=>{const s=setup(1,'command');s.game.threats.warden={x:0,z:-28,ready:0,until:100,strikeAt:0,target:null};for(const r of ROOM_IDS)s.game.roomCircuits[r]=false;s.p.flashlight=false;tickThreats(s.game,s.players,1);assert.equal(s.game.threats.warden.target,null);s.p.flashlight=true;tickThreats(s.game,s.players,1);assert.equal(s.game.threats.warden.target,s.p.id);s.game.effects.push({id:3,item:'flare',x:20,z:0,exterior:true});assert.equal(tickThreats(s.game,s.players,1).hits.length,0);assert.equal(s.game.threats.warden.strikeAt,0);s.p.inventory[0]='emp';assert.equal(useItem(s.game,s.players,s.p,0),null);assert(s.game.empUntil>s.game.time);});
 check('hazard damage is authoritative and every hazard pauses for the escape finale',()=>{const s=setup();electricity(s);const hp=s.p.hp;tick(s,1);assert(s.p.hp<hp);s.game.stage='finale';const result=tickThreats(s.game,s.players,10);assert.equal(result.hits.length,0);});
+check('a Warden strike on the command deck floods the adjacent hull sector',()=>{
+  const s=setup();
+  Object.assign(s.p,{x:0,z:-1,flashlight:true});
+  s.game.time=20;
+  s.game.threats.warden={x:0,z:-28,ready:0,until:100,strikeAt:19};
+  const strike=tickThreats(s.game,s.players,.1);
+  const hit=strike.events.find(e=>e.type==='wardenStrike');
+  assert(hit && ROOM_IDS.includes(hit.room));
+  assert(s.game.rooms[hit.room].flood>.09);
+  assert(strike.hits.some(e=>e.id===s.p.id));
+});
 check('difficulty scales real damage and invalid difficulty falls back safely',()=>{const a=setup(),b=setup();electricity(a);electricity(b);a.game.difficulty='relaxed';b.game.difficulty='nightmare';assert(tickThreats(a.game,a.players,1).hits[0].amount<tickThreats(b.game,b.players,1).hits[0].amount);const ps=[{id:'x',dept:'eva',connected:true}];assert.equal(createGame({players:ps,difficulty:'__proto__'}).difficulty,'normal');});
 check('hazard geometry is finite, bounded and adds no lights or shadows',()=>{const s=setup(),scene=new THREE.Scene(),view=createThreatView(scene);skitters(s);electricity(s);s.game.threats.warden={x:20,z:20,ready:0,until:100};view.update(snapshotGame(s.game,s.players));assert(view.root.children.length<=8);for(const mesh of view.root.children){assert(!mesh.isLight&&!mesh.castShadow);assert([...mesh.geometry.attributes.position.array].every(Number.isFinite));}view.dispose();assert.equal(scene.children.length,0);});
 console.log(`${count} crafting and threat checks passed`);

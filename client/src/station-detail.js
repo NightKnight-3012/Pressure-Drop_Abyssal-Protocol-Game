@@ -1,7 +1,8 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
-import { CRATES, ROOMS, ROOM_IDS, WINDOWS, WINDOW_W, WINDOW_Y0, WINDOW_Y1 } from "../../shared/layout.js";
+import { CRATES, ROOMS, ROOM_IDS, WINDOWS, WINDOW_W, WINDOW_Y0, WINDOW_Y1,
+  HUB, HUB_WIDTH, HUB_CORRIDORS, CORRIDOR_END, CORRIDOR_HALF, COMMAND_DESK, SERVICE_PORTALS } from "../../shared/layout.js";
 
 // These are visual replacements inside existing solid footprints, not new obstacles.
 export const STATION_FURNITURE = ["survey-recorder", "tool-locker", "medical-storage", "treatment-cot", "power-bus"];
@@ -9,7 +10,7 @@ export const ROOM_LIGHT_COLORS = [0x8bcbd3,0xe0b97e,0xb3d5c7,0xd2be9c,0x9ac4cc];
 
 function atlasTexture() {
   if(typeof document==="undefined") return null;
-  const canvas=document.createElement("canvas");canvas.width=canvas.height=1024;
+  const canvas=document.createElement("canvas");canvas.width=1024;canvas.height=2048;
   const g=canvas.getContext("2d");if(!g)return null;
   const rows=[
     ["NEREID-9 / ACOUSTIC SURVEY", "FRACTURE RETURN / CHANNEL 02 / 06:14", "#9cd1d6"],
@@ -19,7 +20,8 @@ function atlasTexture() {
     ["04 / TRANSFER BAY", "MANTA-07  /  RIDGE RECOVERY ROUTE", "#e5c493"],
     ["MAIN LIFT / CABLE SEVERED", "AUXILIARY CRADLE IN BASALT RIDGE / ASTERION UPLINK", "#e7bd7f"],
     ["06:17 / IMPACT RECORD", "MAIN LIFT OFFLINE / ASCENT TANK PRESSURE LOST", "#c3d8d8"],
-    ["NEREID / EMERGENCY ROUTES", "CONTROL 01 / ENGINEERING 02 / MEDICAL 03 / POD 04", "#b3dfc6"]
+    ["COMMAND HUB", "CENTRAL OPERATIONS / CAPTAIN'S STATION", "#b3dfc6"],
+    ["SERVICE LOOP", "ALTERNATE ROUTE / CHECK SHUTTER STATUS", "#edc782"]
   ];
   rows.forEach(([title,sub,color],i)=>{
     const y=i*128;g.fillStyle="#0b1c23";g.fillRect(0,y,1024,128);
@@ -49,7 +51,7 @@ function poolTexture() {
   const map=new THREE.DataTexture(data,size,size);map.magFilter=THREE.LinearFilter;map.minFilter=THREE.LinearFilter;map.needsUpdate=true;return map;
 }
 
-export function createStationDetail(scene) {
+export function createStationDetail(scene, surfaces) {
   const root=new THREE.Group();root.name="NEREID-9 / station identity";scene.add(root);
   const atlas=atlasTexture(),cracks=crackTexture(),soft=poolTexture();
   const mat=(color,extra={})=>new THREE.MeshStandardMaterial({color,roughness:.66,metalness:.45,...extra});
@@ -58,6 +60,7 @@ export function createStationDetail(scene) {
     copper:mat(0x98714a,{roughness:.48}),rubber:mat(0x111d23,{roughness:.88,metalness:.1}),
     cloth:mat(0x899f96,{roughness:.98,metalness:0}),screen:mat(0x37626a,{emissive:0x4e9daa,emissiveIntensity:.45}),
     route:mat(0x87b1ab,{emissive:0x446b68,emissiveIntensity:.35}),
+    deck:mat(0x45595d,{map:surfaces?.metal??null,roughness:.72}),
     signs:new THREE.MeshBasicMaterial({map:atlas,color:0xffffff,side:THREE.FrontSide})
   };
   const pieces=new Map(),physicalBounds=[],signs=[],displayGeometry=new THREE.BoxGeometry(1,1,1);
@@ -74,29 +77,89 @@ export function createStationDetail(scene) {
   function plaque(row,width,x,y,z,yaw=0) {
     signs.push({row,x,y,z,yaw});
     const geo=new THREE.PlaneGeometry(width,width/8),uv=geo.attributes.uv;
-    for(let i=0;i<uv.count;i++)uv.setY(i,1-(row+1)/8+uv.getY(i)/8);
+    for(let i=0;i<uv.count;i++)uv.setY(i,1-(row+1)/16+uv.getY(i)/16);
     if(y<.1)geo.rotateX(-Math.PI/2);
     keep(geo,materials.signs,[x,y,z],[0,yaw,0]);geo.dispose();
   }
   // Architectural frames are high enough to leave the existing door openings clear.
   for(const [i,id] of ROOM_IDS.entries()) {
     const {sx,sz}=ROOMS[id];
-    box([5.8,.24,.32],[sx*5.8,3.55,sz*1.85]);
-    box([.32,.24,5.8],[sx*1.85,3.55,sz*5.8]);
-    for(const x of [sx*2.8,sx*6.2,sx*9.45])box([.12,.4,.5],[x,3.42,sz*1.85],"trim");
-    box([3.42,.5,.12],[sx*5.8,3.55,sz*1.74]);
-    plaque(i+1,3.3,sx*5.8,3.55,sz*1.675,sz<0?0:Math.PI);
+    const corridor=HUB_CORRIDORS[i];
+    const mouthWidth=CORRIDOR_HALF*2;
+    box([mouthWidth+.15,.5,.18],[corridor.x,3.55,sz*HUB]);
+    plaque(i+1,mouthWidth-.12,corridor.x,3.55,sz*(HUB-.094),sz<0?0:Math.PI);
+    plaque(7,mouthWidth-.12,corridor.x,3.74,corridor.end+sz*.127,sz<0?Math.PI:0);
     box([1.1,.11,2.6],[sx*6.3,3.72,sz*5.5],"case");
     for(let vent=0;vent<7;vent++)box([.85,.035,.045],[sx*6.3,3.64,sz*5.5-.95+vent*.3],"trim");
-    // Small stepped arrows on the existing floor; no new collision geometry.
-    for(let j=0;j<4;j++) {
-      const x=sx*(2.2+j*.6),z=sz*2.25;
-      box([.32,.006,.045],[x,.034,z],"route",[0,sx*sz*Math.PI/4,0]);
-      box([.32,.006,.045],[x,.034,z+sz*.2],"route",[0,-sx*sz*Math.PI/4,0]);
+    // Separate cladding and guide lights keep each hallway legible in a blackout.
+    for(const side of [-1,1]) {
+      const x=corridor.x+side*(CORRIDOR_HALF-.20);
+      box([.065,.026,CORRIDOR_END-HUB+.8],[x,.042,corridor.z-sz*.4],"route");
+      box([.12,.21,CORRIDOR_END-HUB],[x,3.72,corridor.z],id==='engineering'?'copper':'trim');
+      const edge=corridor.x+side*CORRIDOR_HALF;
+      box([.19,3.33,.26],[edge,1.68,sz*HUB],"trim");
+      box([.025,.98,.19],[edge-side*.101,2.15,sz*HUB],"screen");
     }
+    if(id==='engineering'){
+      for(const x of [-.65,-.39,-.17])cylinder(.065,CORRIDOR_END-HUB,[corridor.x+x,3.32,corridor.z],"copper",[Math.PI/2,0,0]);
+    }
+    if(id==='medical'){
+      box([1.78,.15,.38],[corridor.x,3.27,corridor.z],"ivory");
+      box([1.38,.05,.16],[corridor.x,3.17,corridor.z],"screen");
+    }
+    if(id==='pod'){
+      for(const side of [-1,1])for(let stripe=0;stripe<4;stripe++){
+        box([.21,.018,.13],[corridor.x+side*.66,.029,sz*(HUB+.28+stripe*.45)],"copper");
+      }
+    }
+    box([mouthWidth+.12,.46,.25],[corridor.x,3.74,corridor.end],"case");
+    box([mouthWidth-.04,.035,.29],[corridor.x,.034,corridor.end],"trim");
     // Perimeter protection rails leave windows, panels and room entrances visible.
     cylinder(.035,7,[sx*9.71,.44,sz*5.4],"trim",[Math.PI/2,0,0]);
   }
+  for(const portal of SERVICE_PORTALS){
+    const alongX=portal.axis==='x';
+    for(const side of [-1,1])plaque(8,1.9,portal.x+(alongX?0:side*.21),3.69,
+      portal.z+(alongX?side*.21:0),alongX?(side>0?0:Math.PI):side*Math.PI/2);
+  }
+  // Continuous deck and overhead ribs establish a cross-aisle between the
+  // routes. The operations alcove is to the side of through traffic.
+  box([HUB_WIDTH*2-.22,.022,HUB*2-.16],[0,.016,0],"deck");
+  for(const c of HUB_CORRIDORS)
+    box([CORRIDOR_HALF*2-.06,.018,CORRIDOR_END-HUB],[c.x,.015,c.z],"deck");
+  for(const z of [-.79,.79])box([5.8,.012,.042],[-.45,.034,z],"trim");
+  for(const z of [-1.55,1.55]){
+    box([HUB_WIDTH*2-.3,.25,.28],[0,3.67,z],"case");
+    box([5.9,.09,.13],[-.52,3.5,z],"screen");
+  }
+  // Low deck platform and wall-side captain's console leave the hub centre
+  // and all four traffic approaches clear.
+  const desk=COMMAND_DESK;
+  const face=desk.cx-desk.w/2;
+  box([1.65,.09,3.13],[desk.cx-.41,.065,0],"trim");
+  box([desk.w,1.02,desk.d],[desk.cx,.58,desk.cz],"case");
+  box([desk.w, .11,desk.d],[desk.cx,1.12,0],"trim");
+  box([.14,.68,1.78],[desk.cx+.22,1.47,0],"case");
+  box([.028,.036,2.09],[face-.012,1.01,0],"route");
+  box([.036,.60,2.16],[face-.012,.56,0],"rubber");
+  for(const z of [-.78,.78]){
+    box([.045,.76,.13],[face-.024,.54,z*1.34],"trim");
+    box([.24,.11,.24],[desk.cx-.12,1.23,z*.88],"case",[0,0,.18]);
+    box([.11,.04,.12],[desk.cx-.15,1.30,z*.88],"screen",[0,0,.18]);
+  }
+  for(let i=0;i<9;i++)box([.023,.037,1.30],[face-.04,.36+i*.052,0],"trim");
+  plaque(7,1.76,desk.cx+.13,1.77,0,-Math.PI/2);
+  const boardCanvas=typeof document==='undefined'?null:document.createElement('canvas');
+  if(boardCanvas){boardCanvas.width=768;boardCanvas.height=256;}
+  const boardContext=boardCanvas?.getContext('2d');
+  const boardTexture=boardContext?new THREE.CanvasTexture(boardCanvas):null;
+  const board=new THREE.Mesh(new THREE.PlaneGeometry(1.62,.48),new THREE.MeshBasicMaterial({map:boardTexture,color:0x83b4b0}));
+  if(boardTexture)boardTexture.colorSpace=THREE.SRGBColorSpace;
+  board.position.set(desk.cx+.144,1.43,0);
+  board.rotation.y=-Math.PI/2;
+  board.name='Command hub station telemetry';
+  root.add(board);
+  let boardKey, boardState;
 
   // Existing crate collision volumes now describe useful, room-specific equipment.
   for(const [i,c] of CRATES.entries()) {
@@ -134,7 +197,7 @@ export function createStationDetail(scene) {
 
   // Wall-mounted records belong to this game's severed-lift incident, not a ghost story.
   plaque(0,3.4,-7.5,2.8,-9.76);plaque(6,2.9,-9.76,2.7,-6,Math.PI/2);
-  plaque(5,3.4,9.76,2.65,6.8,-Math.PI/2);plaque(7,1.5,.9,.039,.2,-Math.PI/2);
+  plaque(5,3.4,9.76,2.65,6.8,-Math.PI/2);
   // Conduit hangers and a damaged cable end above the transfer bay.
   for(let i=0;i<6;i++) {
     cylinder(.045,.75,[4+i*.6,3.5,8.05],"rubber",[0,0,Math.PI/2]);
@@ -181,10 +244,32 @@ export function createStationDetail(scene) {
     update(state,{time=0,reducedEffects=false,camera=null,flashlightOn=false,quality="balanced"}={}) {
       const powered=state.power && (!state.finale || state.finale.station.power>5);
       materials.screen.emissiveIntensity=powered?.6:.12;poolMat.opacity=powered?.085:.045;
+      board.material.color.setHex(powered?0xffffff:0x729497);
+      if(boardContext && state!==boardState){
+        boardState=state;
+        const rows=ROOM_IDS.map(id=>{
+          const room=state.rooms[id];
+          return [id,Math.round((room?.flood??0)*100),!!room?.closed];
+        });
+        const key=JSON.stringify([powered,rows]);
+        if(boardKey!==key){
+          const g=boardContext;
+          g.fillStyle='#08191f';g.fillRect(0,0,768,256);
+          g.fillStyle='#c4dadb';g.font='bold 24px monospace';
+          g.fillText(powered?'NEREID-9 / STATION STATUS':'NEREID-9 / BACKUP TELEMETRY',22,30);
+          rows.forEach(([id,water,closed],i)=>{
+            g.fillStyle=water>55?'#ffb685':closed?'#e6c886':'#8ce3d6';
+            g.fillText(ROOMS[id].label.toUpperCase(),22,77+i*47);
+            g.fillText(closed?'SEALED':'OPEN',390,77+i*47);
+            g.fillText(`${(water/100).toFixed(2)} M`,580,77+i*47);
+          });
+          boardTexture.needsUpdate=true;boardKey=key;
+        }
+      }
       for(const [room,mesh] of damage){const hits=state.rooms[room]?.impacts||0;mesh.visible=hits>0;mesh.material.opacity=Math.min(.52,.24+hits*.035);}
       dust.visible=!!camera && flashlightOn && !reducedEffects;
       if(dust.visible){dust.position.copy(camera.position);camera.getWorldDirection(dustMat.uniforms.uDirection.value);dustMat.uniforms.uOn.value=1;dustMat.uniforms.uTime.value=time;dustGeo.setDrawRange(0,quality==="low"?60:quality==="high"?180:120);}
     },
-    dispose(){scene.remove(root);const geometries=new Set(),mats=new Set();root.traverse(o=>{if(o.geometry)geometries.add(o.geometry);for(const m of Array.isArray(o.material)?o.material:o.material?[o.material]:[])mats.add(m);});geometries.forEach(g=>g.dispose());mats.forEach(m=>m.dispose());for(const map of [atlas,cracks,soft])map?.dispose();}
+    dispose(){scene.remove(root);const geometries=new Set(),mats=new Set();root.traverse(o=>{if(o.geometry)geometries.add(o.geometry);for(const m of Array.isArray(o.material)?o.material:o.material?[o.material]:[])mats.add(m);});geometries.forEach(g=>g.dispose());mats.forEach(m=>m.dispose());for(const map of [atlas,cracks,soft,boardTexture])map?.dispose();}
   };
 }

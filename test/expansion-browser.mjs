@@ -25,7 +25,15 @@ try {
   const evaluate=async expression=>{const r=await call('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true});if(r.exceptionDetails)throw Error(r.exceptionDetails.exception?.description||r.exceptionDetails.text);return r.result?.value;};
   await call('Runtime.enable');await call('Emulation.setDeviceMetricsOverride',{width:1280,height:720,deviceScaleFactor:1,mobile:false});await call('Page.navigate',{url:'http://127.0.0.1:4001'});
   for(let i=0;i<200;i++){if(await evaluate('typeof ExpansionReview!=="undefined"'))break;await sleep(100);}
-  const shots=[
+  const hubShots=[
+    ['command-hub','ExpansionReview.station([-1.25,1.65,1.15],[3.4,1.54,0])'],
+    ['command-hub-north','ExpansionReview.station([.1,1.65,1.9],[.1,2.05,-3.8])'],
+    ['engineering-corridor','ExpansionReview.station([1.94,1.65,-1.45],[1.94,1.85,-6])'],
+    ['medical-corridor','ExpansionReview.station([-1.94,1.65,1.25],[-1.94,1.85,6])'],
+    ['command-hub-flooded','ExpansionReview.station([1.94,1.65,-1.45],[1.94,1.85,-6],false,true)']
+  ];
+  const shots=process.argv.includes('--hub')?hubShots:[
+    ...hubShots,
     ['station-service-loop','ExpansionReview.station([-6,1.65,-3.4],[-5.2,1.7,2])'],
     ['medical-sign-fixed','ExpansionReview.station([-5.8,1.65,6],[-5.8,3.2,2.03])'],
     ['station-pressure-hull','ExpansionReview.station([-16,7,12],[0,3,0],true)'],

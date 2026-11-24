@@ -20,12 +20,17 @@ export function pod(progress=70,phase='run',ascent=.5) {
   g.finale.pod.route.forEach(r=>r.passed=r.at<progress);
   const f=finaleSnapshot(g);current=createPodView();current.kind='pod';for(let i=0;i<30;i++)current.update(f,.05,false,false,false);renderer.render(current.scene,current.camera);return info();
 }
-export function station(from,target,outside=false) {
+export function station(from,target,outside=false,flooded=false) {
   clear();const scene=new THREE.Scene();scene.background=new THREE.Color(0x03121b);scene.fog=new THREE.Fog(0x03121b,outside?20:10,outside?125:65);scene.add(new THREE.HemisphereLight(0x7aa8bc,0x0a1218,1.1));
   const camera=new THREE.PerspectiveCamera(65,innerWidth/innerHeight,.1,180);camera.position.fromArray(from);camera.lookAt(...target);
   const lamp=new THREE.PointLight(0xc3d6d2,35,18);lamp.position.copy(camera.position);scene.add(lamp);
   const world=buildWorld(scene),g=createGame({players:[],seed:1});g.tasks.power.done=true;
+  if(flooded)for(const [i,room] of Object.values(g.rooms).entries())room.flood=.22+i*.25;
+  const wallBatch=scene.getObjectByName('Interior walls and service headers');
+  const floodSurfaces=scene.children.filter(o=>o.name.startsWith('Flood surface / '));
+  if(!wallBatch?.isInstancedMesh||wallBatch.count<30||floodSurfaces.length!==5)throw Error('Station render batches are missing');
   world.update(snapshotGame(g,[]),{dt:.016,time:20,now:Date.now(),reducedEffects:false,holdIds:new Set(),alert:0,viewer:camera.position,camera,flashlightOn:false});
+  if(flooded&&new Set(floodSurfaces.map(surface=>surface.position.y)).size!==5)throw Error('Flood sectors must retain their independent levels');
   current={scene,camera,dispose:()=>world.dispose(),kind:'station'};renderer.render(scene,camera);return info();
 }
 export function redraw(){renderer.render(current.scene,current.camera);return info();}

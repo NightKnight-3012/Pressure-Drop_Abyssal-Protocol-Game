@@ -22,7 +22,11 @@ export const STAMINA = { max: 100, drain: 30, regen: 15, resumeAt: 25 };
 export const HALF = 10;        // outer wall centre line
 export const INNER = 9.8;      // inner face of the outer walls
 export const HULL_OUT = 10.2;  // outer face of the outer walls
-export const HUB = 1.65;       // half-size of the open central hub
+export const HUB = 2.65;       // half-size of the central command deck
+export const HUB_WIDTH = 4.1;   // east-west half-width, including the command alcove
+export const CORRIDOR_END = 4.8;
+export const CORRIDOR_X = 1.94;
+export const CORRIDOR_HALF = 1.18;
 export const WALL_T = 0.25;
 export const DOOR_T = 0.3;
 export const EXT_LIMIT = 60;   // survey perimeter: 120m square; required jobs remain near the hull
@@ -54,8 +58,17 @@ export const ROOMS = {
   medical:     { id: "medical",     label: "Medical Bay",  sx: -1, sz: 1 },
   pod:         { id: "pod",         label: "Escape Pod",   sx: 1,  sz: 1 }
 };
+export const COMMAND_DESK = {cx:3.55,cz:0,w:.76,d:2.45};
+export const HUB_CORRIDORS = ROOM_IDS.map(id=>{
+  const {sx,sz}=ROOMS[id];
+  return {id,x:sx*CORRIDOR_X,z:sz*(HUB+CORRIDOR_END)/2,end:sz*CORRIDOR_END};
+});
+export function corridorAt(x,z) {
+  if(Math.abs(z)<HUB || Math.abs(z)>=CORRIDOR_END) return;
+  return HUB_CORRIDORS.find(c=>Math.sign(c.z)===Math.sign(z) && Math.abs(x-c.x)<CORRIDOR_HALF)?.id;
+}
 export const ZONE_LABEL = {
-  hub: "Central Hub", exterior: "Outside the hull",
+  hub: "Command Hub", exterior: "Outside the hull",
   control: "Control Room", engineering: "Engineering", medical: "Medical Bay", pod: "Escape Pod"
 };
 
@@ -63,19 +76,25 @@ export const ZONE_LABEL = {
 export function roomAt(x, z) {
   if (x > INNER && ANNEX_DECKS.some(deck => insideDeck(x, z, deck, .2))) return 'engineering';
   if (Math.abs(x) > HULL_OUT || Math.abs(z) > HULL_OUT) return "exterior";
-  if (Math.abs(x) < HUB && Math.abs(z) < HUB) return "hub";
+  if (Math.abs(x) < HUB_WIDTH && Math.abs(z) < HUB || corridorAt(x,z)) return "hub";
   if (x < 0 && z < 0) return "control";
   if (x >= 0 && z < 0) return "engineering";
   if (x < 0 && z >= 0) return "medical";
   return "pod";
 }
-export const zoneLabel = (x, z) => x > INNER && ANNEX_DECKS.some(deck => insideDeck(x, z, deck))
-  ? annexBay(x,z) === 'pressure' ? 'Pressure test bay' : annexBay(x,z) === 'compressor' ? 'Compressor bay' : 'East service corridor'
-  : ZONE_LABEL[roomAt(x, z)];
+export function zoneLabel(x,z) {
+  if(x>INNER && ANNEX_DECKS.some(deck=>insideDeck(x,z,deck))){
+    const bay=annexBay(x,z);
+    return bay==='pressure'?'Pressure test bay':bay==='compressor'?'Compressor bay':'East service corridor';
+  }
+  const corridor=corridorAt(x,z);
+  return corridor?`${ROOMS[corridor].label} corridor`:ZONE_LABEL[roomAt(x,z)];
+}
 
 // Which room does a Leviathan at this angle (atan2(z, x)) hit?
 export function roomAtAngle(angle) {
-  return roomAt(Math.cos(angle) * 5, Math.sin(angle) * 5);
+  // The hit lands on a hull sector, beyond the hub and its interior corridors.
+  return roomAt(Math.cos(angle) * 7, Math.sin(angle) * 7);
 }
 
 // ------------------------------------------------------------------ departments
@@ -132,11 +151,17 @@ export const WALLS = [
   { cx: 0, cz: HALF, w: 20.4, d: 0.4 },
   { cx: -HALF, cz: 0, w: 0.4, d: 20.4 },
   { cx: HALF, cz: 1.6, w: 0.4, d: 17.2 },
-  // inner cross walls: four arms that stop at the central hub
-  ...[-1, 1].flatMap(sign => [[HUB,4.3],[6.1,INNER]].flatMap(([a,b]) => [
-    {cx:0,cz:sign*(a+b)/2,w:WALL_T,d:b-a},
-    {cx:sign*(a+b)/2,cz:0,w:b-a,d:WALL_T}
-  ])),
+  // The central deck opens into four enclosed corridors. The original service
+  // openings stay on the far side of these hallways and form a separate loop.
+  ...[-1,1].flatMap(sign=>[
+    {cx:sign*HUB_WIDTH,cz:0,w:WALL_T,d:HUB*2},
+    {cx:0,cz:sign*HUB,w:(CORRIDOR_X-CORRIDOR_HALF)*2,d:WALL_T},
+    ...[-1,1].map(sx=>({cx:sx*(HUB_WIDTH+CORRIDOR_X+CORRIDOR_HALF)/2,cz:sign*HUB,w:HUB_WIDTH-CORRIDOR_X-CORRIDOR_HALF,d:WALL_T})),
+    {cx:0,cz:sign*(HUB+CORRIDOR_END)/2,w:(CORRIDOR_X-CORRIDOR_HALF)*2+WALL_T,d:CORRIDOR_END-HUB},
+    ...[-1,1].map(sx=>({cx:sx*(CORRIDOR_X+CORRIDOR_HALF),cz:sign*(HUB+CORRIDOR_END)/2,w:WALL_T,d:CORRIDOR_END-HUB})),
+    ...[[HUB_WIDTH,4.3],[6.1,INNER]].map(([a,b])=>({cx:sign*(a+b)/2,cz:0,w:b-a,d:WALL_T})),
+    {cx:0,cz:sign*(6.1+INNER)/2,w:WALL_T,d:INNER-6.1}
+  ]),
   { cx: 10, cz: -9.8, w: .4, d: .8 },
   { cx: 13, cz: -9.55, w: 6, d: .3 },
   { cx: 13, cz: -6.85, w: 6, d: .3 },
@@ -192,12 +217,11 @@ export const WINDOW_Y0 = 0.9;
 export const WINDOW_Y1 = 2.9;
 
 // ------------------------------------------------------------------ blast doors
-// Each room is closed off from the hub by two slabs forming an "L" across its open corner.
+// One corridor shutter and two service shutters isolate each department.
 export function doorSlabs(room) {
   const { sx, sz } = ROOMS[room];
   return [
-    aabb(sx * HUB / 2, sz * HUB, HUB + DOOR_T, DOOR_T),
-    aabb(sx * HUB, sz * HUB / 2, DOOR_T, HUB + DOOR_T),
+    aabb(sx * CORRIDOR_X, sz * CORRIDOR_END, CORRIDOR_HALF*2, DOOR_T),
     aabb(sx*5.2,sz*.15,1.8,.24),
     aabb(sx*.15,sz*5.2,.24,1.8)
   ];
@@ -256,10 +280,10 @@ export const STATIONS = {
     x: -10.45, z: 5.5, rot: -Math.PI / 2, hold: 3, dept: null, exterior: true,
     effect: "Cycle back inside"
   },
-  door_control: { id: "door_control", kind: "door", door: "control", label: "Control Room door panel", room: "control", x: -0.28, z: -3.2, rot: -Math.PI / 2, hold: 2.5 },
-  door_engineering: { id: "door_engineering", kind: "door", door: "engineering", label: "Engineering door panel", room: "engineering", x: 0.28, z: -3.2, rot: Math.PI / 2, hold: 2.5 },
-  door_medical: { id: "door_medical", kind: "door", door: "medical", label: "Medical Bay door panel", room: "medical", x: -0.28, z: 3.2, rot: -Math.PI / 2, hold: 2.5 },
-  door_pod: { id: "door_pod", kind: "door", door: "pod", label: "Escape Pod door panel", room: "pod", x: 0.28, z: 3.2, rot: Math.PI / 2, hold: 2.5 },
+  door_control: { id: "door_control", kind: "door", door: "control", label: "Control Room door panel", room: "control", x: -0.28, z: -6.55, rot: -Math.PI / 2, hold: 2.5 },
+  door_engineering: { id: "door_engineering", kind: "door", door: "engineering", label: "Engineering door panel", room: "engineering", x: 0.28, z: -6.55, rot: Math.PI / 2, hold: 2.5 },
+  door_medical: { id: "door_medical", kind: "door", door: "medical", label: "Medical Bay door panel", room: "medical", x: -0.28, z: 6.55, rot: -Math.PI / 2, hold: 2.5 },
+  door_pod: { id: "door_pod", kind: "door", door: "pod", label: "Escape Pod door panel", room: "pod", x: 0.28, z: 6.55, rot: Math.PI / 2, hold: 2.5 },
   j1: { id: "j1", kind: "task", junction: true, label: "Cable junction A", room: "exterior", x: -13, z: -5, rot: 0, hold: 5, dept: "eva", exterior: true, effect: "Re-seat the launch cables" },
   j2: { id: "j2", kind: "task", junction: true, label: "Cable junction B", room: "exterior", x: 6, z: -13, rot: 0, hold: 5, dept: "eva", exterior: true, effect: "Re-seat the launch cables" },
   j3: { id: "j3", kind: "task", junction: true, label: "Cable junction C", room: "exterior", x: 13.5, z: 6, rot: 0, hold: 5, dept: "eva", exterior: true, effect: "Re-seat the launch cables" }
@@ -287,6 +311,7 @@ export const SOLIDS = [
   ...WALLS.map((w) => aabb(w.cx, w.cz, w.w, w.d)),
   ...ROOM_PARTITIONS.map(w=>aabb(w.cx,w.cz,w.w,w.d)),
   ...CRATES.map((c) => aabb(c.cx, c.cz, c.w, c.d)),
+  aabb(COMMAND_DESK.cx,COMMAND_DESK.cz,COMMAND_DESK.w,COMMAND_DESK.d),
   ...ANNEX_MACHINERY.map(m => aabb(m.x, m.z, m.w, m.d)),
   aabb(POD.cx, POD.cz, POD.w, POD.d),
   ...Object.values(STATIONS).filter((s) => !s.exterior).map(stationSolid)

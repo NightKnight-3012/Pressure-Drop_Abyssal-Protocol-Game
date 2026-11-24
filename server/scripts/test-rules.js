@@ -3,7 +3,7 @@ import {
   createGame, tickGame, startHold, cancelHold, remoteDoor, launchDecoy, castVote, tallyVote,
   assignDepartments, toggleDoor, TUNING, stationState, depthAt, isActive
 } from "../game.js";
-import { STATIONS, DEPT_IDS, collides, roomAt, spawnPoint, seatsFor, scalingFor, JUNCTION_IDS, ROOM_IDS, DOOR_STATION } from "../../shared/layout.js";
+import { STATIONS, DEPT_IDS, collides, roomAt, spawnPoint, seatsFor, scalingFor, JUNCTION_IDS, ROOM_IDS, DOOR_STATION, CORRIDOR_X, CORRIDOR_END } from "../../shared/layout.js";
 import { LEV, createLeviathan, stepLeviathan } from "../leviathan.js";
 import { driveFinale } from "./crew-driver.js";
 import { FINALE_POINTS } from "../../shared/tactical.js";
@@ -157,10 +157,10 @@ section("flooding, breaches, pump, doors");
   check("door can close when nobody is in the doorway", toggleDoor(g2.game, g2.players, "pod", ev) === null && g2.game.rooms.pod.closed);
   run(g2.game, g2.players, 5);
   check("a sealed flooded room does not leak into the others", g2.game.rooms.control.flood < 0.01 && g2.game.rooms.pod.flood > 1.9);
-  check("closed door blocks movement", collides(1.0, 1.65, 0.4, ["pod"]) && !collides(1.0, 1.65, 0.4, []));
+  check("closed door blocks movement", collides(CORRIDOR_X, CORRIDOR_END, 0.4, ["pod"]) && !collides(CORRIDOR_X, CORRIDOR_END, 0.4, []));
   const g3 = mk(4);
   g3.game.tasks.power.done = true;
-  put(g3.players[0], { x: 0.9, z: 1.65 });
+  put(g3.players[0], { x: CORRIDOR_X, z: CORRIDOR_END });
   check("cannot close a door on somebody standing in it", /doorway/.test(toggleDoor(g3.game, g3.players, "pod", []) || ""));
   const g4 = mk(4);
   check("doors need power", toggleDoor(g4.game, g4.players, "pod", []) === "The station has no power.");
@@ -449,7 +449,7 @@ section("lockdown (crew split)");
   check("no lockdown before the crew has completed anything", !g5.game.lockdown.active);
   // occupants never stuck in slab
   const g6 = mk(4); g6.game.nextBreachAt = 9999; g6.game.tasks.power.done = true; g6.game.lockdown.nextAt = 1;
-  put(g6.players[0], { x: 0.9, z: 1.65 }); put(g6.players[1], { x: 5, z: 5 }); put(g6.players[2], { x: 6, z: 6 }); put(g6.players[3], { x: 5, z: 7 });
+  put(g6.players[0], { x: CORRIDOR_X, z: CORRIDOR_END }); put(g6.players[1], { x: 5, z: 5 }); put(g6.players[2], { x: 6, z: 6 }); put(g6.players[3], { x: 5, z: 7 });
   run(g6.game, g6.players, 2);
   check("nobody ends up stuck inside a door slab", g6.players.every((p) => !collides(p.x, p.z, 0.4, ROOM_IDS.filter((r) => g6.game.rooms[r].closed))));
   check("8 players => second lockdown possible", mk(8).game.scale.lockdowns === 2);

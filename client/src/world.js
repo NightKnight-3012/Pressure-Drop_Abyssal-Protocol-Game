@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { createModelLibrary } from "./models.js";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
+import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { createHorrorLeviathan } from "./leviathan-horror.js";
 import { FINALE_POINTS } from "../../shared/tactical.js";
 import {CIRCUITS} from '../../shared/fieldwork.js';
@@ -26,7 +27,8 @@ import {createSubView} from './sub-view.js';
 import {createExplorationView} from './exploration-view.js';
 import {
   WALLS, POD, STATIONS, STATION_IDS, WINDOWS, WINDOW_W, WINDOW_Y0, WINDOW_Y1, DOOR_SLABS, ROOM_IDS, ROOMS,
-  INNER, HUB, HULL_OUT, SERVICE_PORTALS, ROOM_PARTITIONS, EXT_LIMIT, ANNEX_ENTRY, ANNEX_DECKS
+  INNER, HUB, HULL_OUT, SERVICE_PORTALS, ROOM_PARTITIONS, EXT_LIMIT, ANNEX_ENTRY, ANNEX_DECKS,
+  HUB_WIDTH, HUB_CORRIDORS, CORRIDOR_X, CORRIDOR_END, CORRIDOR_HALF
 } from "../../shared/layout.js";
 
 const WALL_H = 4;
@@ -66,7 +68,7 @@ export function buildWorld(scene) {
   const surfaces = createSurfaces(); addStationStructure(scene);
   const exploration = createExplorationView(scene,surfaces);
   createStationExterior(scene);
-  const detail = createStationDetail(scene);
+  const detail = createStationDetail(scene,surfaces);
   const scattering = createLightScattering(scene);
   const glow = glowTexture();
   const models = createModelLibrary();
@@ -109,16 +111,22 @@ export function buildWorld(scene) {
   }
 
   const wallMat = std(0x3c5360, { map: surfaces.wall, roughness: 0.66, metalness: 0.3 });
-  for (const w of WALLS.slice(4)) { // inner cross walls
-    const m = new THREE.Mesh(new THREE.BoxGeometry(w.w, WALL_H, w.d), wallMat);
-    m.position.set(w.cx, WALL_H / 2, w.cz);
-    scene.add(m);
-  }
+  const wallBoxes = WALLS.slice(4).map(w=>({...w,y:WALL_H/2,h:WALL_H}));
   for(const p of SERVICE_PORTALS) {
     const horizontal=p.axis==='x';
-    const lintel=new THREE.Mesh(new THREE.BoxGeometry(horizontal?2.15:.4,.65,horizontal?.4:2.15),wallMat);
-    lintel.position.set(p.x,3.68,p.z);scene.add(lintel);
+    wallBoxes.push({cx:p.x,cz:p.z,y:3.68,h:.65,w:horizontal?2.15:.4,d:horizontal?.4:2.15});
   }
+  function addWallBatch(name,boxes,material) {
+    const batch=new THREE.InstancedMesh(new THREE.BoxGeometry(1,1,1),material,boxes.length);
+    const matrix=new THREE.Matrix4();
+    boxes.forEach(({cx,cz,y,w,h,d},i)=>{
+      matrix.makeScale(w,h,d).setPosition(cx,y,cz);
+      batch.setMatrixAt(i,matrix);
+    });
+    batch.name=name;
+    scene.add(batch);
+  }
+  addWallBatch('Interior walls and service headers',wallBoxes,wallMat);
   for(const p of ROOM_PARTITIONS) {
     const panel=new THREE.Mesh(new RoundedBoxGeometry(p.w,p.h,p.d,2,.035),std(p.room==='medical'?0x7d9690:0x344c54,{map:surfaces.wall}));
     panel.position.set(p.cx,p.h/2,p.cz);scene.add(panel);
@@ -130,6 +138,7 @@ export function buildWorld(scene) {
     color: 0x2a6f8f, transparent: true, opacity: 0.22, roughness: 0.1, metalness: 0.6, emissive: 0x06202c, side: THREE.DoubleSide
   });
   const frameMat = std(0x1c2c35, { metalness: 0.4 });
+  const hullBoxes=[], frameBoxes=[];
   function outerWall(side) {
     const horizontal = side === "N" || side === "S";        // wall runs along x
     const fixed = side === "N" || side === "W" ? -10 : 10;   // z (or x) of the wall's centre line
@@ -138,9 +147,9 @@ export function buildWorld(scene) {
       if (side === 'E') u0 = Math.max(u0, ANNEX_ENTRY.maxZ);
       if (u1 - u0 < 0.01) return;
       const len = u1 - u0, uc = (u0 + u1) / 2, h = y1 - y0;
-      const m = new THREE.Mesh(horizontal ? new THREE.BoxGeometry(len, h, 0.4) : new THREE.BoxGeometry(0.4, h, len), mat);
-      m.position.set(horizontal ? uc : fixed, y0 + h / 2, horizontal ? fixed : uc);
-      scene.add(m);
+      const boxes=mat===frameMat?frameBoxes:hullBoxes;
+      boxes.push({cx:horizontal?uc:fixed,cz:horizontal?fixed:uc,y:y0+h/2,h,
+        w:horizontal?len:.4,d:horizontal?.4:len});
     };
     place(-HULL_OUT, HULL_OUT, 0, WINDOW_Y0, wallMat);
     place(-HULL_OUT, HULL_OUT, WINDOW_Y1, WALL_H, wallMat);
@@ -158,6 +167,8 @@ export function buildWorld(scene) {
     place(cursor, HULL_OUT, WINDOW_Y0, WINDOW_Y1, wallMat);
   }
   for (const s of ["N", "S", "E", "W"]) outerWall(s);
+  addWallBatch('Pressure hull panels',hullBoxes,wallMat);
+  addWallBatch('Window frame rails',frameBoxes,frameMat);
 
   // The existing crate solids are furnished by station-detail.js with useful equipment.
 
@@ -330,24 +341,35 @@ export function buildWorld(scene) {
   const waterMat = new THREE.MeshStandardMaterial({ color: 0x15637a, transparent: true, opacity: 0.48, roughness: 0.17, metalness: 0.38, normalMap: surfaces.water, normalScale: new THREE.Vector2(0.45, 0.45), side: THREE.DoubleSide, depthWrite: false });
   const planes = {};
   function waterPlane(cx, cz, w, d) {
-    const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), waterMat);
-    m.rotation.x = -Math.PI / 2;
-    m.position.set(cx, 0, cz);
-    m.renderOrder = 2; m.visible = false;
-    scene.add(m);
-    return m;
+    return new THREE.PlaneGeometry(w,d).rotateX(-Math.PI/2).translate(cx,0,cz);
   }
   for (const room of ROOM_IDS) {
     const { sx, sz } = ROOMS[room];
+    const corridorLeft=CORRIDOR_X-CORRIDOR_HALF;
+    const corridorRight=CORRIDOR_X+CORRIDOR_HALF;
+    const middle=(HUB+CORRIDOR_END)/2, length=CORRIDOR_END-HUB;
     planes[room] = [
-      waterPlane(sx * INNER / 2, sz * (HUB + INNER) / 2, INNER, INNER - HUB),
-      waterPlane(sx * (HUB + INNER) / 2, sz * HUB / 2, INNER - HUB, HUB)
+      waterPlane(sx * INNER / 2, sz * (CORRIDOR_END + INNER) / 2, INNER, INNER - CORRIDOR_END),
+      waterPlane(sx * (HUB_WIDTH + INNER) / 2, sz * HUB / 2, INNER - HUB_WIDTH, HUB),
+      waterPlane(sx * corridorLeft/2,sz*middle,corridorLeft,length),
+      waterPlane(sx * (corridorRight+INNER)/2,sz*middle,INNER-corridorRight,length)
     ];
   }
-  planes.hub = [waterPlane(0, 0, HUB * 2, HUB * 2)];
+  planes.hub = [waterPlane(0, 0, HUB_WIDTH * 2, HUB * 2),
+    ...HUB_CORRIDORS.map(c=>waterPlane(c.x,c.z,CORRIDOR_HALF*2,CORRIDOR_END-HUB))];
   for (const {cx,cz,w,d} of ANNEX_DECKS) planes.engineering.push(waterPlane(cx,cz,w,d));
-  function setLevel(list, level, heave) {
-    for (const m of list) { m.visible = level > 0.02; m.position.y = level + heave; }
+  for(const [zone,geometry] of Object.entries(planes)){
+    const surface=new THREE.Mesh(mergeGeometries(geometry),waterMat);
+    surface.name=`Flood surface / ${zone}`;
+    surface.renderOrder=2;
+    surface.visible=false;
+    planes[zone]=surface;
+    scene.add(surface);
+    geometry.forEach(plane=>plane.dispose());
+  }
+  function setLevel(surface, level, heave) {
+    surface.visible = level > 0.02;
+    surface.position.y = level + heave;
   }
 
   // ================================================================ breaches

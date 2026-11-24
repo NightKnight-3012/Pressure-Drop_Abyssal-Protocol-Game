@@ -1,5 +1,5 @@
 // Pure, seeded state machines. The rules module applies the returned damage.
-import {ROOM_IDS,FLOOD_MAX,roomAt,nearestFree,pathBlocked} from '../shared/layout.js';
+import {ROOM_IDS,FLOOD_MAX,roomAt,roomAtAngle,nearestFree,pathBlocked} from '../shared/layout.js';
 import {MINE_SITES,DIFFICULTIES} from '../shared/fieldwork.js';
 export const THREAT_TUNING=Object.freeze({skitterFirst:140,skitterGap:100,skitterWarning:8,skitterLife:50,skitterSpeed:1.5,skitterDps:3,electricFirst:170,electricWarning:8,electricLife:45,electricDps:4,mineRadius:2.8,mineFuse:4,mineDamage:30,wardenFirst:480,wardenWarning:9,wardenDps:6,wardenLife:75});
 const active=p=>p.connected&&!p.lost&&!p.downed&&!p.aboard&&!p.escaped;
@@ -40,7 +40,16 @@ export function tickThreats(game,players,dt){
     w.x=Math.cos(nextAngle)*rad;w.z=Math.sin(nextAngle)*rad;
     if(flare){w.strikeAt=0;return out;}
     if(target.exterior){if(distance(target,w)<3)hit(target,T.wardenDps*dt,'warden');w.strikeAt=0;}
-    else if(Math.abs(delta)<.25){if(!w.strikeAt)w.strikeAt=game.time+T.wardenWarning;if(game.time>=w.strikeAt){const room=roomAt(target.x,target.z);game.rooms[room].flood=Math.min(FLOOD_MAX,game.rooms[room].flood+.1);for(const p of crew)if(!p.exterior&&roomAt(p.x,p.z)===room)hit(p,10,'warden');out.events.push({type:'wardenStrike',room});w.strikeAt=game.time+18;}}else w.strikeAt=0;
+    else if(Math.abs(delta)<.25){
+      if(!w.strikeAt)w.strikeAt=game.time+T.wardenWarning;
+      if(game.time>=w.strikeAt){
+        const zone=roomAt(target.x,target.z);
+        const room=ROOM_IDS.includes(zone)?zone:roomAtAngle(angle);
+        game.rooms[room].flood=Math.min(FLOOD_MAX,game.rooms[room].flood+.1);
+        for(const p of crew)if(!p.exterior&&roomAt(p.x,p.z)===zone)hit(p,10,'warden');
+        out.events.push({type:'wardenStrike',room});w.strikeAt=game.time+18;
+      }
+    }else w.strikeAt=0;
   }
   return out;
 }

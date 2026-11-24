@@ -10,6 +10,8 @@ The station is flooding, and a blind Leviathan is circling the hull. It hunts by
 
 Pick a department in the lobby, or start with **Solo Training** to learn the controls. In a crew, you can split up to restore the station faster, but an alarm or a flooded passage can change the plan mid-repair.
 
+The **Command Hub** has a clear cross-aisle between the four department corridors and a captain's desk off to one side. Check the desk for flooding and sealed shutters, then follow the signed service loop if a neighboring route is open.
+
 1. **Bring the station back online.** Restore power first, then get the flood pump, life support and Command console running. Follow the calibration prompts on major instruments, then hold the interact key to finish the repair.
 2. **Keep the hull quiet.** Sprinting makes noise, and the Leviathan follows it. Walk when you have time, patch leaks before they spread, and use the wrist computer to see which rooms are flooding.
 3. **Go outside.** Take the airlock to reconnect the launch cables. Keep an eye on your suit oxygen and leave enough air for the return trip.

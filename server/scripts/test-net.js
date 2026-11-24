@@ -5,7 +5,7 @@ import http from "node:http";
 import { Server } from "socket.io";
 import { io as connect } from "socket.io-client";
 import { attachGame } from "../net.js";
-import { STATIONS, PLAYER_RADIUS, WALK_SPEED, SWIM_SPEED, collides, spawnPoint, DEPT_IDS, MAX_PLAYERS } from "../../shared/layout.js";
+import { STATIONS, PLAYER_RADIUS, WALK_SPEED, SWIM_SPEED, collides, spawnPoint, DEPT_IDS, MAX_PLAYERS, CORRIDOR_X, CORRIDOR_END } from "../../shared/layout.js";
 import { FINALE_POINTS } from "../../shared/tactical.js";
 
 let fails = 0, checks = 0;
@@ -202,8 +202,10 @@ async function matchTests() {
     // closed door blocks movement
     game.rooms.pod.closed = true;
     const probe = cs[3]; probe.corrections = 0;
-    S.api.rooms.get(eng.code).matchPlayers[3].x = 3; S.api.rooms.get(eng.code).matchPlayers[3].z = 3; probe.x = 3; probe.z = 3;
-    await sleep(100); probe.x = 1.0; probe.z = 1.65; probe.send(false);
+    const nearDoor={x:CORRIDOR_X,z:CORRIDOR_END+.62};
+    Object.assign(S.api.rooms.get(eng.code).matchPlayers[3],nearDoor);
+    Object.assign(probe,nearDoor);
+    await sleep(100); probe.z = CORRIDOR_END; probe.send(false);
     check("a closed blast door blocks players on the server", await probe.waitFor(() => probe.corrections > 0, 800));
     game.rooms.pod.closed = false;
     probe.corrections = 0;
@@ -213,7 +215,7 @@ async function matchTests() {
     // honest walking to the power core, no corrections
     game.nextBreachAt = 99999; game.lockdown.nextAt = 99999;
     eng.corrections = 0;
-    await eng.walk([[-6, -4], [-1, -1], [1, -1], [3, -3], [3, -6], [8.25, -6]]);
+    await eng.walk([[-CORRIDOR_X,-8],[-CORRIDOR_X,-1.8],[CORRIDOR_X,-1.8],[CORRIDOR_X,-5.55],[3,-5.55],[3,-6],[8.25,-6]]);
     check("honest walking across the station causes zero corrections", eng.corrections === 0, String(eng.corrections));
     const spec = eng.state.calibrations.power;
     for (let i = 1; i <= 3; i++) if (spec.target & (1 << (i - 1))) { eng.socket.emit("repair:input", { id: "power", value: i }); await sleep(120); }

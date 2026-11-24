@@ -8,8 +8,8 @@ import { podMotionTarget, POD_VISUAL_SCALE, updatePodTravel } from "../client/sr
 
 let checks = 0;
 function check(name, value) { assert.ok(value, name); checks++; console.log(`PASS ${name}`); }
-check("opposite sides of a thin wall have free destinations", !collides(-0.8, -6) && !collides(0.8, -6));
-check("a valid destination cannot bypass the wall along its path", pathBlocked(-0.8, -6, 0.8, -6));
+check("opposite sides of a thin wall have free destinations", !collides(-0.8, -7.7) && !collides(0.8, -7.7));
+check("a valid destination cannot bypass the wall along its path", pathBlocked(-0.8, -7.7, 0.8, -7.7));
 check("the open central corridor remains traversable", !pathBlocked(-1, -1, 1, -1));
 check("non-finite movement is refused", pathBlocked(0, 0, NaN, 1));
 check("path checking has a bounded cost for extreme packets", pathBlocked(0, 0, 1e10, 1));

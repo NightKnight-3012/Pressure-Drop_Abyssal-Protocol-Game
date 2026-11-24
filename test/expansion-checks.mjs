@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import {collides,insideStation,roomAt,ROOM_IDS,SERVICE_PORTALS,STATIONS,spawnPoint,HUB} from '../shared/layout.js';
+import {collides,pathBlocked,insideStation,roomAt,roomAtAngle,ROOM_IDS,SERVICE_PORTALS,STATIONS,spawnPoint,HUB,HUB_WIDTH,HUB_CORRIDORS,COMMAND_DESK,CORRIDOR_HALF} from '../shared/layout.js';
 import {routeFrame,createRoute} from '../shared/escape-route.js';
 import {rescuePose,RESCUE_DURATION,RESCUE_SEA_LEVEL} from '../client/src/rescue-sequence.js';
 import {createRouteScenery} from '../client/src/route-scenery.js';
@@ -12,7 +12,7 @@ function reachable(closed=[],avoidHub=false) {
   const q=[[Math.round(start.x/step)*step,start.z]],seen=new Set([key(...q[0])]);
   for(let i=0;i<q.length;i++)for(const [dx,dz] of [[step,0],[-step,0],[0,step],[0,-step]]) {
     const x=q[i][0]+dx,z=q[i][1]+dz,k=key(x,z);
-    if(seen.has(k)||!insideStation(x,z)||avoidHub&&Math.abs(x)<HUB+.45&&Math.abs(z)<HUB+.45||collides(x,z,.4,closed))continue;
+    if(seen.has(k)||!insideStation(x,z)||avoidHub&&Math.abs(x)<HUB_WIDTH+.45&&Math.abs(z)<HUB+.45||collides(x,z,.4,closed))continue;
     seen.add(k);q.push([x,z]);
   }return q;
 }
@@ -21,8 +21,18 @@ check('physical service loop connects all departments without crossing the hub',
 check('every repair and launch panel has a reachable working position',Object.values(STATIONS).filter(s=>!s.exterior).every(s=>loop.some(([x,z])=>Math.hypot(x-s.x,z-s.z)<2.2&&roomAt(x,z)===s.room)));
 const sealed=reachable(['control']);check('closing Control seals central and service exits',sealed.every(([x,z])=>roomAt(x,z)==='control'));
 check('all four service openings are actually walkable',SERVICE_PORTALS.every(p=>!collides(p.x,p.z)));
+for(const {id,x,z,end} of HUB_CORRIDORS){
+  const approach=Math.sign(z)*(HUB-.55), bay=end+Math.sign(z)*.58;
+  check(`${id} has a walkable hallway and a functional shutter`,
+    roomAt(x,z)==='hub' && roomAt(x,bay)===id &&
+    !pathBlocked(x,approach,x,bay) && pathBlocked(x,approach,x,bay,.4,[id]));
+  check(`${id} corridor has room for two crew to pass`,
+    [-.48,.48].every(offset=>CORRIDOR_HALF>.88&&!pathBlocked(x+offset,approach,x+offset,bay)));
+}
+check('the command desk is solid and leaves a clear route through the centre',collides(COMMAND_DESK.cx,0)&&!pathBlocked(0,-1.8,0,1.8));
+check('every strike angle lands on a hull sector beyond the corridors',Array.from({length:360},(_,i)=>roomAtAngle(i*Math.PI/180)).every(id=>ROOM_IDS.includes(id)));
 const detail=createStationDetail(new THREE.Scene());
-check('department signs face the hub approach and stay mounted on the header backing',detail.signs.filter(s=>s.row>=1&&s.row<=4).every(s=>Math.sign(Math.cos(s.yaw))===-Math.sign(s.z)&&Math.abs(Math.abs(s.z)-1.675)<.001&&Math.abs(s.y-3.55)<.001));
+check('department signs face the hub approach and stay mounted on the header backing',detail.signs.filter(s=>s.row>=1&&s.row<=4).every(s=>Math.sign(Math.cos(s.yaw))===-Math.sign(s.z)&&Math.abs(Math.abs(s.z)-(HUB-.094))<.001&&Math.abs(s.y-3.55)<.001));
 check('each department has one physical heading rather than duplicate room signs',detail.signs.filter(s=>s.row>=1&&s.row<=4).length===4);detail.dispose();
 const route=createRoute(()=>.5);check('the escape route contains telegraphed collapse sections',route.length===14&&route.some(g=>g.kind==='falling'));
 check('every obstacle leaves at least two clear steering lanes',route.every(g=>[-1,0,1].filter(l=>Math.abs(l-g.lane)>=.52).length>=2));
